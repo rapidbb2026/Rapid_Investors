@@ -6,16 +6,16 @@ Field monitor for the Investor Survey. Sign in with username `rapid`.
 - `index.html` - the dashboard page
 - `data/data.json` - the data the page reads (rebuilt by the Action)
 - `scripts/build.py` - turns the Kobo XLSX export into `data/data.json` and runs the data checks
-- `scripts/fetch_kobo.py` - downloads the export from Kobo
+- `scripts/fetch_kobo.py` - asks Kobo for a fresh XLS export (same options as the Downloads page) and downloads it
 - `scripts/bd_div.json` - division boundaries (geoBoundaries, CC BY 4.0)
 - `.github/workflows/update.yml` - runs every 30 minutes
 
 ## Setup
 1. Upload everything in this folder to a new GitHub repository (keep the folder structure, including `.github`).
-2. In Kobo, open the form > Data > Downloads. Choose XLS, "Labels", "Include all versions", then "Save selection as..." to make a saved export.
-   Copy its synchronous export link (looks like `https://kf.kobotoolbox.org/api/v2/assets/<form id>/export-settings/<setting id>/data.xlsx`).
-3. Get your Kobo API token: Account settings > Security > API key.
-4. In GitHub: Settings > Secrets and variables > Actions > New repository secret. Add `KOBO_EXPORT_URL` and `KOBO_TOKEN`.
+2. Get your Kobo API token: on eu.kobotoolbox.org, Account settings > Security > API key.
+   A shared user's token works, as long as the account can view submissions.
+3. In GitHub: Settings > Secrets and variables > Actions > New repository secret. Name `KOBO_TOKEN`, value = the API key.
+4. The server and form ID are already set in `.github/workflows/update.yml`.
 5. Settings > Pages > Deploy from branch > `main`, folder `/ (root)`.
 6. Actions > Update dashboard data > Run workflow, to fill the data the first time.
 
