@@ -1,0 +1,901 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>
+<title>Investor Survey Monitor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
+<style>
+/* Layout: one long monitor page, filters pinned on top, summary tiles, then map, profile, problem grids, trade, stats, checks.
+   Look: steel-and-copper "port yard" dark theme, sibling to the SERWE and Remittance monitors. Single dark look by design. */
+:root{
+  color-scheme:dark;
+  --bg:#0B0E13; --bg2:#11161F; --card:#141A25; --card2:#1A2231; --line:#243045; --line2:#34425C;
+  --ink:#ECEFF5; --muted:#98A4B9; --faint:#67738B;
+  --for:#F2A65A; --dom:#7DB7E8; --accent:#F2A65A; --accent2:#FFD2A1;
+  --s0:#3B4659; --s1:#6E8DAE; --s2:#E7C36A; --s3:#EF8A4B; --s4:#E0514C;
+  --ok:#5FD49A; --warn:#F2C14E; --bad:#F27A6E;
+  --display:"Archivo","Segoe UI",system-ui,sans-serif;
+  --sans:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:
+  radial-gradient(900px 520px at 6% -8%,rgba(125,183,232,.13),transparent 62%),
+  radial-gradient(800px 520px at 100% 6%,rgba(242,166,90,.10),transparent 60%),
+  var(--bg);
+  color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- sign in ---------- */
+#login{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px));
+  background:radial-gradient(1100px 700px at 15% 10%,#16233A 0%,transparent 60%),radial-gradient(900px 640px at 92% 92%,#3A2312 0%,transparent 58%),var(--bg)}
+#bg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.login-card{position:relative;width:min(410px,100%);padding:30px 28px 26px;border-radius:16px;
+  background:rgba(14,19,28,.7);border:1px solid rgba(242,166,90,.26);
+  box-shadow:0 30px 80px rgba(0,0,0,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.brand{display:flex;align-items:center;gap:13px;margin-bottom:22px}
+.mark{width:46px;height:46px;border-radius:10px;display:grid;place-items:center;flex:none;
+  background:repeating-linear-gradient(90deg,#F2A65A 0 5px,#C9773A 5px 7px)}
+.mark span{width:34px;height:34px;border-radius:6px;background:#0E131C;display:grid;place-items:center;font:800 .9rem var(--display);color:var(--accent2);letter-spacing:.02em}
+.brand h1{margin:0;font:700 1.2rem var(--display);letter-spacing:-.01em}
+.field{display:grid;gap:6px;margin-bottom:14px}
+.field label,.sel label,.sel .lab{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.inp{position:relative}
+.inp input{width:100%;padding:11px 12px;border-radius:9px;border:1px solid var(--line);background:rgba(6,9,14,.7);color:var(--ink)}
+.inp input:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px rgba(242,166,90,.2)}
+.eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;color:var(--muted);cursor:pointer;padding:6px 8px;font-size:.8rem}
+.go{width:100%;margin-top:6px;padding:12px;border:0;border-radius:9px;cursor:pointer;font-weight:700;color:#1E1204;background:linear-gradient(90deg,#FFC98F,#F2A65A 55%,#D9853F)}
+.go:hover{filter:brightness(1.07)}
+.go:disabled{opacity:.6;cursor:wait}
+.msg{min-height:1.4em;margin:10px 0 0;font-size:.86rem;color:var(--bad)}
+.shake{animation:shake .35s}
+@keyframes shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+
+/* ---------- page ---------- */
+#app{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 56px}
+.wrap{max-width:1260px;margin:0 auto;display:grid;gap:16px}
+header{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between}
+header .eyebrow{font:700 .72rem var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+header h1{margin:2px 0 0;font:800 clamp(1.4rem,3.1vw,2rem) var(--display);letter-spacing:-.02em;text-wrap:balance}
+.tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.stamp{font-family:var(--mono);font-size:.76rem;color:var(--muted);text-align:right;line-height:1.4}
+.stamp b{color:var(--ink);font-weight:500}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--bg2)}
+.seg button{background:transparent;border:0;color:var(--muted);padding:7px 12px;cursor:pointer;font-size:.85rem;font-weight:700}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#1E1204}
+.seg button:disabled{opacity:.4;cursor:not-allowed}
+.out{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:9px;padding:7px 12px;cursor:pointer;font-size:.85rem}
+.out:hover{color:var(--ink);border-color:var(--line2)}
+
+.filterbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-end;padding:12px 14px;border-radius:14px;
+  background:rgba(14,19,28,.95);border:1px solid var(--line);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 10px 30px rgba(0,0,0,.3)}
+.sel{display:grid;gap:5px;min-width:0}
+.sel select,.search{background:var(--bg2);color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:8px 10px;max-width:100%}
+.filterbar .sel select{min-width:min(190px,100%)}
+.keys{display:flex;gap:14px;font-size:.8rem;color:var(--muted);margin-left:auto;align-self:center;flex-wrap:wrap}
+.keys i,.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.fnote{font:500 .78rem var(--mono);color:var(--accent2);align-self:center}
+
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:760px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
+.kpi .lab,.st .lab{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+.kpi .val{font:500 1.9rem var(--mono);font-variant-numeric:tabular-nums;line-height:1.25}
+.kpi .val small{font:500 .8rem var(--sans);color:var(--muted);margin-left:4px}
+.kpi .note{font-size:.78rem;color:var(--faint);margin-top:2px}
+.kpi.main{background:linear-gradient(135deg,#3A2412,#1B2233 70%);border-color:#6A4321;position:relative;overflow:hidden}
+.kpi.main::after{content:"";position:absolute;right:-8px;top:12px;width:70px;height:46px;border-radius:4px;opacity:.35;
+  background:repeating-linear-gradient(90deg,#F2A65A 0 4px,transparent 4px 9px)}
+.kpi.main .val{color:var(--accent2)}
+.kpi .split{display:flex;flex-wrap:wrap;gap:0 6px;align-items:baseline;font:500 1.35rem var(--mono);line-height:1.5}
+.kpi .split small{font:600 .72rem var(--sans);color:var(--muted)}
+.kpi.flag .val{color:var(--bad)}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;min-width:0}
+.card h2{margin:0 0 8px;font:700 1.04rem var(--display);letter-spacing:-.005em;text-wrap:balance}
+.card h2 small{font:700 .68rem var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:2px}
+.hint{margin:2px 0 8px;color:var(--muted);font-size:.84rem;max-width:80ch}
+.chart{width:100%;height:320px}
+.maprow{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:16px;align-items:start}
+#c-map{height:480px}
+.rank{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.rank li{display:grid;grid-template-columns:12px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border-radius:9px;background:var(--bg2);border:1px solid transparent;cursor:pointer}
+.rank li:hover{border-color:var(--line2)}
+.rank li.on{border-color:var(--accent)}
+.rank .sw{width:12px;height:12px;border-radius:3px}
+.rank .nm{font-weight:600}
+.rank .ct{font:500 .95rem var(--mono);font-variant-numeric:tabular-nums}
+.rank .sp{grid-column:2 / 4;font-size:.76rem;color:var(--muted);margin-top:-4px}
+.rank li.zero{opacity:.5}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,480px),1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:16px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 4px;font-size:.8rem;color:var(--muted)}
+.head-row{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;margin-bottom:6px}
+.head-row h2{margin:0}
+
+.sevwrap{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:900px){.sevwrap{grid-template-columns:1fr}}
+
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th{text-align:left;font-weight:700;color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid var(--line);padding:6px 8px 6px 0;vertical-align:bottom}
+td{border-bottom:1px solid rgba(36,48,69,.75);padding:7px 8px 7px 0;vertical-align:top}
+td.num,th.num{text-align:right}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+td.mono{font-family:var(--mono);font-size:.84rem;white-space:nowrap}
+.scroll{max-height:520px;overflow:auto}
+.scroll thead th{position:sticky;top:0;background:var(--card);z-index:1}
+tr.click{cursor:pointer}
+tr.click:hover td{background:rgba(255,255,255,.03)}
+.pill{display:inline-block;font-size:.74rem;font-weight:700;padding:1px 9px;border-radius:10px;white-space:nowrap}
+.pill.ok{background:rgba(95,212,154,.13);color:var(--ok)}
+.pill.warn{background:rgba(242,193,78,.14);color:var(--warn)}
+.pill.bad{background:rgba(242,122,110,.14);color:var(--bad)}
+.pill.f{background:rgba(242,166,90,.15);color:var(--for)}
+.pill.d{background:rgba(125,183,232,.15);color:var(--dom)}
+.empty{color:var(--muted);font-size:.9rem;padding:8px 0}
+.muted{color:var(--muted)}
+.bar{display:flex;align-items:center;gap:8px;margin-top:5px}
+.bar span{display:block;height:8px;border-radius:99px;background:linear-gradient(90deg,var(--s3),var(--s4));min-width:2px}
+
+.stat-head{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end;justify-content:space-between}
+.sel select{min-width:min(300px,100%)}
+.stiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:12px}
+.st{background:var(--bg2);border:1px solid rgba(36,48,69,.7);border-radius:10px;padding:10px 12px;min-width:0}
+.st .val{font:500 1.22rem var(--mono);font-variant-numeric:tabular-nums;line-height:1.3;word-break:break-word}
+.inner{margin-top:12px}
+.sub2{margin:0 0 4px;font:700 .9rem var(--display)}
+.outl{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.outl button{font:500 .78rem var(--mono);padding:2px 8px;border-radius:6px;border:0;cursor:pointer;background:rgba(242,122,110,.13);color:var(--bad)}
+.outl button.x{background:rgba(242,122,110,.3);color:#FFD9D2}
+.outl button:hover{background:rgba(242,122,110,.45);color:#fff}
+.qtext{margin:12px 0 0;font:600 1rem var(--sans);max-width:90ch;text-wrap:balance}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--bg2);color:var(--muted);cursor:pointer;font-weight:600;font-size:.84rem}
+.chip b{font:500 .8rem var(--mono);color:var(--ink)}
+.chip:hover{color:var(--ink);border-color:var(--line2)}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#1E1204}
+.chip[aria-pressed="true"] b{color:#1E1204}
+
+.quotes{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:10px}
+.quotes li{background:var(--bg2);border-left:3px solid var(--accent);border-radius:4px 10px 10px 4px;padding:10px 12px}
+.quotes li.d{border-left-color:var(--dom)}
+.quotes p{margin:0 0 4px}
+.quotes small{color:var(--faint);font-size:.78rem}
+
+dialog{width:min(880px,calc(100vw - 24px));max-height:88vh;padding:0;border:1px solid var(--line2);border-radius:14px;background:var(--bg2);color:var(--ink);overflow:hidden}
+dialog[open]{display:flex;flex-direction:column}
+dialog::backdrop{background:rgba(3,5,9,.72);backdrop-filter:blur(3px)}
+.casehd{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.casehd h2{margin:0;font:700 1.05rem var(--display)}
+#case-body{overflow:auto;padding:0 18px 18px}
+#case-body h3{font:700 .72rem var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:16px 0 4px}
+#case-body table td{padding:6px 8px 6px 0;overflow-wrap:anywhere}
+#case-body table td:first-child{color:var(--muted);width:55%}
+.casechips{position:sticky;top:0;z-index:1;display:flex;flex-wrap:wrap;gap:6px;padding:10px 0;background:var(--bg2)}
+.casechips span{padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--line);font-size:.82rem;font-weight:600}
+.casechips i{font-style:normal;font-weight:500;color:var(--muted);margin-right:4px}
+footer{color:var(--faint);font-size:.8rem}
+@media (max-width:760px){.filterbar{position:static}}
+@media (max-width:820px){.maprow{grid-template-columns:1fr}#c-map{height:380px}.keys{margin-left:0}.stamp{text-align:left}}
+@media (prefers-reduced-motion:reduce){.shake{animation:none}}
+</style>
+
+<div id="login">
+  <canvas id="bg" aria-hidden="true"></canvas>
+  <form class="login-card" id="loginForm" autocomplete="on">
+    <div class="brand">
+      <div class="mark"><span>IS</span></div>
+      <div><h1>Investor Survey Monitor</h1></div>
+    </div>
+    <div class="field"><label for="user">Username</label><div class="inp"><input id="user" name="username" autocomplete="username" required></div></div>
+    <div class="field"><label for="pass">Password</label><div class="inp"><input id="pass" name="password" type="password" autocomplete="current-password" required><button class="eye" type="button" id="eye" aria-label="Show password">Show</button></div></div>
+    <button class="go" id="go" type="submit">Sign in</button>
+    <p class="msg" id="msg" role="alert"></p>
+  </form>
+</div>
+
+<div id="app" hidden>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">Tariffs, customs and investment</div>
+      <h1>Investor Survey · Field Monitor</h1>
+    </div>
+    <div class="tools">
+      <div class="stamp">Kobo export <b id="exported">–</b><br>Latest interview <b id="updated">–</b></div>
+      <div class="seg" role="group" aria-label="Chart style"><button type="button" id="b3d" aria-pressed="true">3D</button><button type="button" id="b2d" aria-pressed="false">2D</button></div>
+      <button class="out" id="logout" type="button">Sign out</button>
+    </div>
+  </header>
+
+  <div class="filterbar" aria-label="Filters">
+    <div class="sel"><span class="lab">Ownership</span><div class="seg" role="group" aria-label="Ownership"><button type="button" class="grpb" data-g="all" aria-pressed="true">All</button><button type="button" class="grpb" data-g="Foreign or JV" aria-pressed="false">Foreign or JV</button><button type="button" class="grpb" data-g="Domestic" aria-pressed="false">Domestic</button></div></div>
+    <div class="sel"><label for="fzone">Zone</label><select id="fzone"></select></div>
+    <div class="sel"><label for="fdiv">Division</label><select id="fdiv"></select></div>
+    <div class="sel"><label for="fen">Enumerator</label><select id="fen"></select></div>
+    <span class="fnote" id="fnote"></span>
+    <div class="keys"><span><i style="background:var(--for)"></i>Foreign or JV</span><span><i style="background:var(--dom)"></i>Domestic</span></div>
+  </div>
+
+  <section class="kpis" aria-label="Key numbers">
+    <div class="kpi main"><div class="lab">Interviews completed</div><div class="val" id="k-int">–</div></div>
+    <div class="kpi"><div class="lab">Today</div><div class="val" id="k-today">–</div></div>
+    <div class="kpi"><div class="lab">Last 7 days</div><div class="val" id="k-7">–</div></div>
+    <div class="kpi"><div class="lab">Ownership</div><div class="split"><span style="color:var(--for)" id="k-for">–</span><small>foreign/JV</small><span style="color:var(--dom)" id="k-dom">–</span><small>domestic</small></div></div>
+    <div class="kpi"><div class="lab">Inside a zone</div><div class="val" id="k-zone">–</div><div class="note">EPZ, BEZA or Hi-Tech Park</div></div>
+    <div class="kpi"><div class="lab">Imported in last 12 months</div><div class="val" id="k-imp">–</div></div>
+    <div class="kpi"><div class="lab">Median interview</div><div class="val" id="k-min">–</div><div class="note">start to end of form</div></div>
+    <div class="kpi flag"><div class="lab">Records with a problem</div><div class="val" id="k-flag">–</div><div class="note">see Data checks</div></div>
+  </section>
+
+  <section class="card">
+    <h2>Interviews by division</h2>
+    <p class="hint" id="map-hint">Click a division to filter the page. In 2D the dots show where each form's GPS point was recorded.</p>
+    <div class="maprow">
+      <div class="chart" id="c-map"></div>
+      <ul class="rank" id="rank"></ul>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="head-row"><h2>Survey progress</h2>
+      <div class="seg" role="group" aria-label="Period"><button type="button" class="per" data-p="day" aria-pressed="true">Daily</button><button type="button" class="per" data-p="week" aria-pressed="false">Weekly</button><button type="button" class="per" data-p="month" aria-pressed="false">Monthly</button></div>
+    </div>
+    <div class="legend"><span><i style="background:var(--ink)"></i>Total, cumulative</span><span><i style="background:var(--for)"></i>Foreign or JV</span><span><i style="background:var(--dom)"></i>Domestic</span></div>
+    <div class="chart" id="c-trend"></div>
+  </section>
+
+  <section class="card">
+    <h2>Interviews per day</h2>
+    <div class="chart" id="c-time"></div>
+  </section>
+
+  <div class="grid2">
+    <section class="card"><h2><small>Firm profile</small>Zone status</h2><div class="chart" id="c-zone"></div></section>
+    <section class="card"><h2><small>Firm profile</small>Investment type by ownership</h2><div class="chart" id="c-own"></div></section>
+    <section class="card"><h2><small>Firm profile</small>Main sector</h2><div class="chart" id="c-sector"></div></section>
+    <section class="card"><h2><small>Firm profile</small>Firm size by permanent workers</h2><div class="chart" id="c-size"></div></section>
+    <section class="card"><h2><small>Firm profile</small>Annual turnover, FY2025-26</h2><div class="chart" id="c-turn"></div></section>
+    <section class="card"><h2><small>Trade</small>Share of sales exported directly</h2><div class="chart" id="c-exp"></div></section>
+    <section class="card"><h2><small>Trade</small>Main port or station of entry for imports</h2><div class="chart" id="c-port"></div></section>
+    <section class="card"><h2><small>Trade</small>Use of bonded, drawback, exemption or zone schemes</h2><div class="chart" id="c-scheme"></div></section>
+  </div>
+
+  <section class="card" id="sev-c1">
+    <h2><small>Section C1</small>How serious are tariff and customs problems for the firm?</h2>
+    <p class="hint">Sorted by the share of firms rating the problem serious or very serious.</p>
+    <div class="legend" id="sevkey"></div>
+    <div class="sevwrap">
+      <div class="chart" id="c-c1" style="height:520px"></div>
+      <div class="tbl"><table id="t-c1"><thead><tr><th>Problem</th><th class="num">All</th><th class="num">Foreign or JV</th><th class="num">Domestic</th></tr></thead><tbody></tbody></table><p class="hint" style="margin-top:8px">% rating it serious or very serious.</p></div>
+    </div>
+  </section>
+
+  <section class="card" id="sev-e1">
+    <h2><small>Section E1</small>How serious are wider investment-climate problems?</h2>
+    <div class="sevwrap">
+      <div class="chart" id="c-e1" style="height:360px"></div>
+      <div class="tbl"><table id="t-e1"><thead><tr><th>Problem</th><th class="num">All</th><th class="num">Foreign or JV</th><th class="num">Domestic</th></tr></thead><tbody></tbody></table><p class="hint" style="margin-top:8px">% rating it serious or very serious.</p></div>
+    </div>
+  </section>
+
+  <div class="grid2">
+    <section class="card"><h2><small>Section F1</small>What tariff or customs issues made firms do in the last 3 years</h2><p class="hint">% of firms. A firm can report more than one effect.</p><div class="chart" id="c-f1" style="height:360px"></div></section>
+    <section class="card"><h2><small>Section G1</small>Most urgent reforms</h2><p class="hint">% of firms that put the reform in their top three.</p><div class="chart" id="c-g1" style="height:420px"></div></section>
+  </div>
+
+  <div class="grid3">
+    <section class="card"><h2><small>Outlook</small>Confidence that rules stay the same for two years</h2><div class="chart" id="c-conf" style="height:260px"></div></section>
+    <section class="card"><h2><small>Outlook</small>Government and business consultation on tariff changes</h2><div class="chart" id="c-cons" style="height:260px"></div></section>
+    <section class="card"><h2><small>Outlook</small>Overall tariff and customs environment for investment</h2><div class="chart" id="c-over" style="height:260px"></div></section>
+  </div>
+
+  <section class="card">
+    <div class="head-row"><h2>Top traded products</h2>
+      <div class="seg" role="group" aria-label="Product list"><button type="button" class="pl" data-l="imports" aria-pressed="true">Imports</button><button type="button" class="pl" data-l="exports" aria-pressed="false">Exports</button></div>
+    </div>
+    <p class="hint">Values as entered, in Tk. Rows marked "check" were entered in US dollars or not as a number, so they are left out of the statistics below.</p>
+    <div class="tbl scroll"><table id="t-prod"><thead><tr><th>Product</th><th>HS code</th><th class="num">Value (Tk)</th><th>Firm</th><th>Sector</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="card" id="stats">
+    <div class="stat-head">
+      <h2>Quantitative statistics</h2>
+      <div class="sel"><label for="svar">Question</label><select id="svar"></select></div>
+    </div>
+    <div class="stiles">
+      <div class="st"><div class="lab">Answers (n)</div><div class="val" id="s-n">–</div></div>
+      <div class="st"><div class="lab">Mean</div><div class="val" id="s-mean">–</div></div>
+      <div class="st"><div class="lab">Median</div><div class="val" id="s-med">–</div></div>
+      <div class="st"><div class="lab">Mode</div><div class="val" id="s-mode">–</div></div>
+      <div class="st"><div class="lab">Std. deviation</div><div class="val" id="s-sd">–</div></div>
+      <div class="st"><div class="lab">Range</div><div class="val" id="s-rng">–</div></div>
+      <div class="st"><div class="lab">Distribution</div><div class="val" id="s-pill" style="font-size:1rem;line-height:1.35">–</div></div>
+      <div class="st"><div class="lab">Outliers</div><div class="val" id="s-oc">–</div></div>
+    </div>
+    <div class="grid2 inner">
+      <div>
+        <h3 class="sub2">Distribution</h3>
+        <div class="chart" id="c-hist" style="height:280px"></div>
+      </div>
+      <div>
+        <h3 class="sub2">Box plot and outliers</h3>
+        <div class="chart" id="c-box" style="height:170px"></div>
+        <div class="outl" id="s-olist"></div>
+        <h3 class="sub2" style="margin-top:14px">By ownership</h3>
+        <div class="tbl"><table id="t-grp"><thead><tr><th>Group</th><th class="num">n</th><th class="num">Mean</th><th class="num">Median</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="answers">
+    <div class="stat-head">
+      <h2>Answers by question</h2>
+      <div class="sel"><label for="qvar">Question</label><select id="qvar"></select></div>
+    </div>
+    <h3 class="qtext" id="q-text"></h3>
+    <div class="stiles" style="grid-template-columns:repeat(auto-fit,minmax(150px,220px))">
+      <div class="st"><div class="lab">Answered (n)</div><div class="val" id="q-n">–</div></div>
+      <div class="st"><div class="lab">Most common</div><div class="val" id="q-top" style="font-size:1rem;line-height:1.35">–</div></div>
+      <div class="st"><div class="lab">Type</div><div class="val" id="q-type" style="font-size:1rem;line-height:1.35">–</div></div>
+    </div>
+    <div class="chart" id="c-ans"></div>
+  </section>
+
+  <section class="card">
+    <h2>Tariff lines, SROs and procedures firms want the study to examine</h2>
+    <p class="hint" id="sug-hint"></p>
+    <ul class="quotes" id="sug"></ul>
+  </section>
+
+  <section class="card">
+    <div class="head-row"><h2>Firms interviewed</h2><input class="search" id="fq" type="search" placeholder="Find firm, district or product" aria-label="Find a firm"></div>
+    <p class="hint">Click a row to see every answer for that firm.</p>
+    <div class="tbl scroll"><table id="t-firms"><thead><tr><th>Date</th><th>Firm</th><th>District</th><th>Zone</th><th>Ownership</th><th>Main product</th><th class="num">Minutes</th><th>Checks</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <div class="grid2">
+    <section class="card">
+      <h2>Enumerators</h2>
+      <div class="tbl"><table id="t-enum"><thead><tr><th>Submitted by</th><th class="num">Total</th><th class="num">Today</th><th class="num">Median minutes</th><th class="num">With a problem</th><th>Last interview</th></tr></thead><tbody></tbody></table></div>
+    </section>
+    <section class="card">
+      <h2>Form versions in use</h2>
+      <div class="tbl"><table id="t-ver"><thead><tr><th>Version</th><th class="num">Records</th><th>First used</th><th>Last used</th></tr></thead><tbody></tbody></table></div>
+      <p class="hint" style="margin-top:10px">Three versions are live at once. The fixed-asset answer bands differ between them, so that question cannot be compared across all records.</p>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Data checks</h2>
+    <div class="chips" id="iss-chips" role="group" aria-label="Problem type"></div>
+    <div class="tbl scroll"><table id="t-iss"><thead><tr><th>Problem</th><th>Record</th><th>Firm</th><th>Enumerator</th><th>Date</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <footer id="foot"></footer>
+  <dialog id="case" aria-labelledby="case-title"><div class="casehd"><h2 id="case-title"></h2><button type="button" class="out" id="case-x">Close</button></div><div id="case-body"></div></dialog>
+</div>
+</div>
+
+<script>window.__DATA__=null;</script>
+<script>var BD_DIV={"type":"FeatureCollection","features":[{"type":"Feature","properties":{"name":"Chattogram"},"geometry":{"type":"MultiPolygon","coordinates":[[[[92.314,20.666],[92.3,20.675],[92.29,20.668],[92.286,20.656],[92.296,20.642],[92.302,20.635],[92.302,20.626],[92.305,20.621],[92.31,20.622],[92.311,20.632],[92.31,20.656],[92.311,20.662],[92.314,20.666]]],[[[91.89,21.791],[91.901,21.821],[91.901,21.879],[91.892,21.899],[91.89,21.921],[91.874,21.93],[91.831,21.916],[91.837,21.892],[91.853,21.873],[91.85,21.854],[91.848,21.826],[91.839,21.778],[91.846,21.759],[91.857,21.754],[91.89,21.791]]],[[[91.236,22.65],[91.233,22.623],[91.245,22.581],[91.312,22.546],[91.316,22.594],[91.309,22.62],[91.253,22.649],[91.236,22.649],[91.236,22.65]]],[[[91.467,22.601],[91.429,22.646],[91.336,22.671],[91.396,22.598],[91.402,22.531],[91.387,22.46],[91.478,22.404],[91.503,22.364],[91.513,22.345],[91.57,22.39],[91.543,22.507],[91.497,22.553],[91.482,22.583],[91.464,22.597],[91.463,22.596],[91.467,22.601]]],[[[91.054,22.723],[91.045,22.694],[91.075,22.649],[91.073,22.596],[91.1,22.57],[91.155,22.568],[91.189,22.611],[91.166,22.663],[91.114,22.699],[91.107,22.711],[91.103,22.71],[91.054,22.723]]],[[[91.311,22.691],[91.305,22.712],[91.246,22.742],[91.251,22.751],[91.25,22.752],[91.197,22.765],[91.191,22.743],[91.243,22.708],[91.286,22.686],[91.311,22.691]]],[[[91.318,22.766],[91.346,22.733],[91.375,22.719],[91.381,22.735],[91.35,22.765],[91.35,22.764],[91.318,22.766]]],[[[91.307,24.207],[91.31,24.231],[91.29,24.238],[91.258,24.244],[91.215,24.244],[91.181,24.243],[91.136,24.234],[91.116,24.213],[91.094,24.201],[91.06,24.207],[91.039,24.185],[91.042,24.161],[91.056,24.142],[91.066,24.113],[91.061,24.08],[91.036,24.059],[91.001,24.034],[90.993,24.001],[90.992,23.965],[90.968,23.951],[90.94,23.916],[90.93,23.894],[90.918,23.874],[90.863,23.859],[90.801,23.862],[90.771,23.851],[90.759,23.791],[90.737,23.768],[90.736,23.727],[90.734,23.708],[90.71,23.689],[90.687,23.679],[90.676,23.67],[90.666,23.646],[90.666,23.626],[90.7,23.57],[90.709,23.525],[90.687,23.503],[90.626,23.494],[90.611,23.461],[90.595,23.417],[90.601,23.38],[90.636,23.347],[90.654,23.31],[90.66,23.256],[90.643,23.221],[90.623,23.199],[90.577,23.139],[90.586,23.061],[90.59,23.057],[90.648,22.99],[90.676,22.963],[90.713,22.945],[90.786,22.869],[90.82,22.754],[90.939,22.566],[90.967,22.54],[91.014,22.504],[91.041,22.449],[91.059,22.374],[91.06,22.329],[91.042,22.233],[91.03,22.201],[91.021,22.12],[91.037,22.094],[91.122,22.111],[91.15,22.176],[91.141,22.24],[91.139,22.317],[91.141,22.386],[91.134,22.428],[91.109,22.473],[91.076,22.51],[91.02,22.548],[91.039,22.594],[91.047,22.633],[91.027,22.698],[90.983,22.828],[90.986,22.854],[91.067,22.797],[91.137,22.805],[91.173,22.838],[91.324,22.779],[91.353,22.817],[91.377,22.825],[91.414,22.773],[91.481,22.771],[91.527,22.697],[91.565,22.66],[91.598,22.631],[91.615,22.611],[91.642,22.572],[91.667,22.546],[91.703,22.492],[91.727,22.44],[91.752,22.377],[91.759,22.306],[91.857,22.152],[91.915,22.05],[91.935,21.916],[91.925,21.792],[91.897,21.708],[91.907,21.639],[91.902,21.592],[91.909,21.503],[91.988,21.503],[92.009,21.499],[92.0,21.419],[92.002,21.381],[92.025,21.337],[92.051,21.262],[92.058,21.204],[92.069,21.161],[92.164,21.037],[92.203,20.973],[92.236,20.88],[92.287,20.806],[92.358,20.728],[92.351,20.782],[92.329,20.831],[92.312,20.885],[92.305,20.909],[92.305,20.93],[92.299,20.955],[92.272,21.004],[92.273,21.023],[92.286,21.038],[92.286,21.057],[92.28,21.077],[92.247,21.111],[92.208,21.163],[92.209,21.176],[92.213,21.189],[92.232,21.206],[92.23,21.258],[92.223,21.328],[92.241,21.344],[92.254,21.35],[92.266,21.367],[92.27,21.391],[92.286,21.418],[92.315,21.413],[92.331,21.416],[92.338,21.434],[92.34,21.451],[92.351,21.467],[92.362,21.473],[92.375,21.473],[92.389,21.463],[92.399,21.45],[92.426,21.396],[92.449,21.362],[92.458,21.354],[92.475,21.353],[92.501,21.353],[92.515,21.355],[92.537,21.364],[92.548,21.371],[92.567,21.362],[92.57,21.34],[92.57,21.324],[92.573,21.302],[92.588,21.262],[92.596,21.251],[92.606,21.246],[92.63,21.243],[92.641,21.248],[92.654,21.262],[92.683,21.284],[92.691,21.303],[92.68,21.321],[92.674,21.347],[92.668,21.362],[92.666,21.381],[92.661,21.396],[92.648,21.464],[92.642,21.484],[92.624,21.517],[92.624,21.555],[92.609,21.768],[92.615,21.808],[92.629,21.85],[92.648,21.894],[92.641,21.938],[92.614,22.027],[92.605,22.059],[92.574,22.143],[92.606,22.125],[92.605,22.179],[92.612,22.218],[92.603,22.256],[92.584,22.311],[92.573,22.382],[92.549,22.513],[92.538,22.556],[92.534,22.595],[92.542,22.625],[92.531,22.732],[92.496,22.766],[92.467,22.784],[92.47,22.86],[92.458,22.896],[92.413,22.924],[92.391,22.953],[92.386,22.977],[92.389,23.023],[92.401,23.047],[92.398,23.077],[92.367,23.145],[92.362,23.222],[92.362,23.249],[92.369,23.267],[92.382,23.287],[92.401,23.311],[92.373,23.338],[92.387,23.382],[92.355,23.433],[92.328,23.47],[92.324,23.481],[92.322,23.526],[92.313,23.579],[92.289,23.635],[92.284,23.655],[92.285,23.678],[92.29,23.694],[92.292,23.712],[92.283,23.731],[92.266,23.745],[92.248,23.73],[92.239,23.713],[92.239,23.695],[92.229,23.66],[92.223,23.659],[92.214,23.684],[92.219,23.702],[92.219,23.724],[92.208,23.741],[92.191,23.752],[92.172,23.755],[92.15,23.747],[92.128,23.736],[92.106,23.719],[92.093,23.702],[92.089,23.69],[92.076,23.674],[92.074,23.66],[92.042,23.662],[92.019,23.677],[91.996,23.73],[91.986,23.743],[91.957,23.745],[91.926,23.72],[91.932,23.686],[91.944,23.645],[91.95,23.595],[91.968,23.544],[91.957,23.484],[91.954,23.445],[91.921,23.452],[91.884,23.45],[91.874,23.429],[91.837,23.385],[91.805,23.333],[91.796,23.311],[91.784,23.292],[91.778,23.273],[91.785,23.236],[91.797,23.207],[91.815,23.19],[91.822,23.166],[91.824,23.146],[91.822,23.13],[91.813,23.107],[91.799,23.088],[91.784,23.075],[91.756,23.043],[91.748,23.027],[91.736,23.014],[91.723,23.002],[91.702,22.99],[91.666,22.987],[91.652,22.98],[91.639,22.975],[91.626,22.981],[91.618,22.987],[91.596,22.975],[91.586,22.972],[91.565,22.981],[91.541,23.012],[91.535,23.06],[91.53,23.077],[91.526,23.122],[91.516,23.162],[91.522,23.189],[91.484,23.233],[91.444,23.267],[91.426,23.273],[91.409,23.27],[91.401,23.251],[91.4,23.228],[91.393,23.203],[91.392,23.161],[91.395,23.14],[91.411,23.095],[91.409,23.082],[91.399,23.082],[91.383,23.088],[91.37,23.096],[91.355,23.115],[91.334,23.16],[91.329,23.185],[91.328,23.251],[91.316,23.301],[91.304,23.323],[91.301,23.343],[91.293,23.365],[91.239,23.49],[91.19,23.548],[91.164,23.609],[91.158,23.642],[91.195,23.67],[91.192,23.714],[91.173,23.746],[91.177,23.775],[91.214,23.775],[91.232,23.783],[91.23,23.81],[91.241,23.895],[91.236,23.949],[91.27,23.978],[91.295,24.003],[91.31,24.043],[91.307,24.063],[91.291,24.085],[91.285,24.117],[91.285,24.153],[91.291,24.18],[91.307,24.207]]]]}},{"type":"Feature","properties":{"name":"Dhaka"},"geometry":{"type":"Polygon","coordinates":[[[91.215,24.244],[91.201,24.282],[91.175,24.306],[91.199,24.326],[91.23,24.334],[91.241,24.343],[91.23,24.366],[91.228,24.382],[91.251,24.392],[91.257,24.4],[91.238,24.415],[91.223,24.432],[91.243,24.464],[91.222,24.486],[91.2,24.47],[91.162,24.483],[91.178,24.505],[91.236,24.533],[91.239,24.564],[91.212,24.594],[91.203,24.629],[91.194,24.64],[91.192,24.642],[91.154,24.623],[91.092,24.616],[91.07,24.617],[91.025,24.601],[91.004,24.601],[90.971,24.598],[90.9,24.591],[90.878,24.581],[90.834,24.536],[90.798,24.526],[90.77,24.523],[90.753,24.512],[90.707,24.499],[90.676,24.496],[90.628,24.508],[90.615,24.508],[90.607,24.477],[90.639,24.454],[90.67,24.443],[90.673,24.429],[90.665,24.399],[90.652,24.382],[90.651,24.363],[90.665,24.344],[90.669,24.325],[90.665,24.31],[90.645,24.289],[90.618,24.282],[90.586,24.282],[90.571,24.299],[90.549,24.319],[90.509,24.333],[90.481,24.345],[90.417,24.315],[90.365,24.299],[90.314,24.284],[90.272,24.309],[90.259,24.338],[90.258,24.386],[90.259,24.413],[90.236,24.444],[90.233,24.466],[90.248,24.477],[90.248,24.501],[90.206,24.524],[90.174,24.564],[90.144,24.594],[90.14,24.613],[90.154,24.637],[90.152,24.652],[90.137,24.705],[90.134,24.735],[90.114,24.768],[90.088,24.792],[90.048,24.79],[90.02,24.753],[89.99,24.727],[89.965,24.738],[89.935,24.765],[89.895,24.75],[89.883,24.725],[89.883,24.689],[89.875,24.649],[89.843,24.624],[89.832,24.598],[89.799,24.579],[89.798,24.578],[89.773,24.562],[89.748,24.544],[89.74,24.526],[89.748,24.502],[89.754,24.492],[89.751,24.461],[89.737,24.436],[89.761,24.408],[89.765,24.393],[89.761,24.359],[89.783,24.322],[89.798,24.28],[89.798,24.25],[89.794,24.21],[89.795,24.189],[89.799,24.145],[89.809,24.074],[89.802,24.062],[89.8,24.03],[89.776,24.009],[89.74,23.997],[89.718,23.974],[89.759,23.927],[89.771,23.891],[89.787,23.86],[89.794,23.796],[89.794,23.765],[89.732,23.76],[89.683,23.77],[89.641,23.771],[89.612,23.793],[89.576,23.821],[89.547,23.796],[89.505,23.79],[89.464,23.806],[89.457,23.831],[89.437,23.859],[89.408,23.879],[89.337,23.895],[89.337,23.904],[89.308,23.908],[89.255,23.912],[89.255,23.912],[89.259,23.891],[89.313,23.864],[89.327,23.829],[89.325,23.787],[89.306,23.753],[89.306,23.726],[89.33,23.689],[89.381,23.663],[89.424,23.676],[89.508,23.544],[89.508,23.531],[89.5,23.525],[89.497,23.516],[89.503,23.5],[89.523,23.493],[89.54,23.493],[89.559,23.488],[89.572,23.482],[89.587,23.47],[89.592,23.446],[89.594,23.42],[89.589,23.404],[89.582,23.392],[89.588,23.379],[89.582,23.361],[89.597,23.344],[89.604,23.326],[89.606,23.313],[89.613,23.296],[89.626,23.284],[89.654,23.276],[89.646,23.264],[89.63,23.249],[89.631,23.235],[89.647,23.23],[89.675,23.225],[89.693,23.207],[89.69,23.172],[89.735,23.166],[89.74,23.17],[89.752,23.141],[89.731,23.127],[89.719,23.125],[89.699,23.127],[89.682,23.12],[89.678,23.109],[89.695,23.089],[89.72,23.071],[89.737,23.055],[89.752,23.014],[89.779,22.997],[89.787,22.984],[89.802,22.964],[89.813,22.945],[89.813,22.927],[89.81,22.912],[89.81,22.893],[89.817,22.875],[89.834,22.854],[89.856,22.844],[89.872,22.84],[89.905,22.849],[89.946,22.834],[89.949,22.845],[89.991,22.879],[90.025,22.896],[90.042,22.911],[90.062,22.958],[90.106,23.001],[90.12,23.024],[90.174,23.045],[90.211,23.037],[90.229,22.99],[90.282,22.977],[90.34,22.977],[90.377,22.998],[90.407,23.024],[90.415,23.027],[90.447,23.039],[90.498,23.092],[90.53,23.084],[90.56,23.043],[90.59,23.057],[90.586,23.061],[90.577,23.139],[90.623,23.199],[90.643,23.221],[90.66,23.256],[90.654,23.31],[90.636,23.347],[90.601,23.38],[90.595,23.417],[90.611,23.461],[90.626,23.494],[90.687,23.503],[90.709,23.525],[90.7,23.57],[90.666,23.626],[90.666,23.646],[90.676,23.67],[90.687,23.679],[90.71,23.689],[90.734,23.708],[90.736,23.727],[90.737,23.768],[90.759,23.791],[90.771,23.851],[90.801,23.862],[90.863,23.859],[90.918,23.874],[90.93,23.894],[90.94,23.916],[90.968,23.951],[90.992,23.965],[90.993,24.001],[91.001,24.034],[91.036,24.059],[91.061,24.08],[91.066,24.113],[91.056,24.142],[91.042,24.161],[91.039,24.185],[91.06,24.207],[91.094,24.201],[91.116,24.213],[91.136,24.234],[91.181,24.243],[91.215,24.244]]]}},{"type":"Feature","properties":{"name":"Mymensingh"},"geometry":{"type":"Polygon","coordinates":[[[91.194,24.64],[91.198,24.642],[91.236,24.658],[91.26,24.693],[91.218,24.729],[91.183,24.743],[91.176,24.758],[91.191,24.783],[91.217,24.817],[91.159,24.817],[91.152,24.839],[91.137,24.87],[91.097,24.881],[91.059,24.893],[91.036,24.903],[91.003,24.911],[90.978,24.97],[90.967,25.011],[90.971,25.061],[90.982,25.094],[90.986,25.115],[90.977,25.172],[90.947,25.16],[90.866,25.175],[90.78,25.185],[90.726,25.177],[90.69,25.17],[90.664,25.175],[90.629,25.177],[90.584,25.175],[90.552,25.177],[90.503,25.175],[90.471,25.168],[90.385,25.168],[90.325,25.179],[90.29,25.193],[90.243,25.208],[90.129,25.238],[90.076,25.257],[90.037,25.276],[89.981,25.302],[89.932,25.319],[89.9,25.313],[89.857,25.302],[89.831,25.311],[89.829,25.354],[89.79,25.391],[89.766,25.368],[89.779,25.298],[89.773,25.232],[89.743,25.212],[89.721,25.193],[89.708,25.16],[89.685,25.135],[89.676,25.094],[89.673,25.063],[89.67,25.037],[89.661,24.983],[89.687,24.919],[89.698,24.886],[89.689,24.838],[89.733,24.828],[89.754,24.813],[89.775,24.789],[89.799,24.766],[89.809,24.736],[89.818,24.694],[89.797,24.652],[89.799,24.579],[89.832,24.598],[89.843,24.624],[89.875,24.649],[89.883,24.689],[89.883,24.725],[89.895,24.75],[89.935,24.765],[89.965,24.738],[89.99,24.727],[90.02,24.753],[90.048,24.79],[90.088,24.792],[90.114,24.768],[90.134,24.735],[90.137,24.705],[90.152,24.652],[90.154,24.637],[90.14,24.613],[90.144,24.594],[90.174,24.564],[90.206,24.524],[90.248,24.501],[90.248,24.477],[90.233,24.466],[90.236,24.444],[90.259,24.413],[90.258,24.386],[90.259,24.338],[90.272,24.309],[90.314,24.284],[90.365,24.299],[90.417,24.315],[90.481,24.345],[90.509,24.333],[90.549,24.319],[90.571,24.299],[90.586,24.282],[90.618,24.282],[90.645,24.289],[90.665,24.31],[90.669,24.325],[90.665,24.344],[90.651,24.363],[90.652,24.382],[90.665,24.399],[90.673,24.429],[90.67,24.443],[90.639,24.454],[90.607,24.477],[90.615,24.508],[90.628,24.508],[90.676,24.496],[90.707,24.499],[90.753,24.512],[90.77,24.523],[90.798,24.526],[90.834,24.536],[90.878,24.581],[90.9,24.591],[90.971,24.598],[91.004,24.601],[91.025,24.601],[91.07,24.617],[91.092,24.616],[91.154,24.623],[91.192,24.642],[91.194,24.64]]]}},{"type":"Feature","properties":{"name":"Rajshahi"},"geometry":{"type":"Polygon","coordinates":[[[89.799,24.579],[89.797,24.652],[89.818,24.694],[89.809,24.736],[89.799,24.766],[89.775,24.789],[89.754,24.813],[89.733,24.828],[89.689,24.838],[89.698,24.886],[89.687,24.919],[89.661,24.983],[89.67,25.037],[89.673,25.063],[89.672,25.063],[89.636,25.043],[89.606,25.041],[89.582,25.036],[89.551,25.029],[89.51,25.035],[89.466,25.047],[89.377,25.06],[89.352,25.07],[89.33,25.085],[89.291,25.097],[89.247,25.107],[89.227,25.124],[89.212,25.14],[89.184,25.168],[89.175,25.176],[89.175,25.205],[89.182,25.217],[89.143,25.229],[89.111,25.229],[89.07,25.246],[89.035,25.248],[88.99,25.271],[88.967,25.27],[88.942,25.255],[88.941,25.23],[88.933,25.183],[88.922,25.176],[88.907,25.174],[88.884,25.18],[88.843,25.201],[88.826,25.201],[88.813,25.195],[88.798,25.179],[88.781,25.178],[88.77,25.187],[88.696,25.209],[88.675,25.205],[88.639,25.202],[88.597,25.201],[88.579,25.176],[88.536,25.18],[88.529,25.188],[88.503,25.207],[88.493,25.208],[88.47,25.206],[88.448,25.193],[88.447,25.171],[88.458,25.16],[88.454,25.143],[88.429,25.128],[88.431,25.113],[88.436,25.099],[88.438,25.079],[88.432,25.075],[88.419,25.072],[88.418,25.055],[88.433,25.038],[88.436,25.023],[88.421,25.013],[88.408,25.008],[88.403,24.983],[88.387,24.958],[88.361,24.947],[88.333,24.938],[88.326,24.923],[88.327,24.908],[88.335,24.891],[88.333,24.875],[88.315,24.871],[88.297,24.869],[88.284,24.874],[88.262,24.886],[88.255,24.896],[88.239,24.926],[88.225,24.947],[88.2,24.96],[88.175,24.963],[88.123,24.93],[88.119,24.919],[88.144,24.902],[88.161,24.866],[88.157,24.846],[88.143,24.833],[88.102,24.813],[88.089,24.783],[88.068,24.775],[88.058,24.761],[88.05,24.72],[88.031,24.702],[88.021,24.685],[88.034,24.672],[88.059,24.635],[88.076,24.612],[88.097,24.59],[88.095,24.551],[88.097,24.539],[88.135,24.506],[88.153,24.499],[88.158,24.493],[88.188,24.469],[88.212,24.465],[88.245,24.466],[88.269,24.462],[88.293,24.454],[88.367,24.406],[88.47,24.352],[88.486,24.343],[88.514,24.322],[88.532,24.315],[88.562,24.323],[88.587,24.324],[88.605,24.314],[88.612,24.307],[88.628,24.303],[88.645,24.313],[88.668,24.336],[88.689,24.324],[88.707,24.31],[88.723,24.284],[88.73,24.266],[88.731,24.248],[88.726,24.224],[88.711,24.188],[88.753,24.183],[88.779,24.151],[88.807,24.132],[88.869,24.122],[88.91,24.131],[88.974,24.13],[88.995,24.113],[89.022,24.075],[89.041,24.037],[89.091,23.964],[89.151,23.938],[89.185,23.932],[89.197,23.932],[89.203,23.951],[89.208,23.966],[89.254,23.956],[89.254,23.922],[89.255,23.912],[89.308,23.908],[89.337,23.904],[89.337,23.895],[89.408,23.879],[89.437,23.859],[89.457,23.831],[89.464,23.806],[89.505,23.79],[89.547,23.796],[89.576,23.821],[89.612,23.793],[89.641,23.771],[89.683,23.77],[89.732,23.76],[89.794,23.765],[89.794,23.796],[89.787,23.86],[89.771,23.891],[89.759,23.927],[89.718,23.974],[89.74,23.997],[89.776,24.009],[89.8,24.03],[89.802,24.062],[89.809,24.074],[89.799,24.145],[89.795,24.189],[89.794,24.21],[89.798,24.25],[89.798,24.28],[89.783,24.322],[89.761,24.359],[89.765,24.393],[89.761,24.408],[89.737,24.436],[89.751,24.461],[89.754,24.492],[89.748,24.502],[89.74,24.526],[89.748,24.544],[89.773,24.562],[89.798,24.578],[89.799,24.579]]]}},{"type":"Feature","properties":{"name":"Rangpur"},"geometry":{"type":"Polygon","coordinates":[[[89.79,25.391],[89.827,25.356],[89.821,25.375],[89.819,25.401],[89.827,25.424],[89.835,25.435],[89.845,25.502],[89.842,25.516],[89.846,25.542],[89.856,25.562],[89.863,25.585],[89.86,25.596],[89.852,25.61],[89.853,25.624],[89.857,25.636],[89.867,25.654],[89.867,25.662],[89.855,25.675],[89.837,25.711],[89.823,25.729],[89.82,25.741],[89.826,25.748],[89.836,25.755],[89.847,25.767],[89.842,25.789],[89.829,25.803],[89.816,25.825],[89.82,25.837],[89.834,25.853],[89.839,25.874],[89.849,25.884],[89.863,25.895],[89.873,25.906],[89.883,25.921],[89.869,25.93],[89.832,25.942],[89.822,25.952],[89.848,25.963],[89.856,25.976],[89.851,25.987],[89.832,25.986],[89.824,25.988],[89.815,25.998],[89.811,26.011],[89.809,26.022],[89.793,26.032],[89.784,26.041],[89.781,26.055],[89.786,26.058],[89.794,26.068],[89.794,26.081],[89.777,26.106],[89.759,26.122],[89.744,26.145],[89.741,26.154],[89.735,26.158],[89.72,26.157],[89.695,26.146],[89.682,26.144],[89.675,26.149],[89.673,26.161],[89.672,26.182],[89.68,26.207],[89.679,26.215],[89.671,26.221],[89.655,26.226],[89.644,26.227],[89.622,26.203],[89.618,26.192],[89.609,26.178],[89.592,26.158],[89.585,26.14],[89.591,26.121],[89.593,26.105],[89.59,26.092],[89.601,26.07],[89.603,26.08],[89.614,26.104],[89.633,26.107],[89.636,26.086],[89.641,26.07],[89.642,26.056],[89.636,26.047],[89.609,26.043],[89.596,26.039],[89.582,26.035],[89.563,26.025],[89.563,25.998],[89.565,25.99],[89.577,25.98],[89.582,25.973],[89.581,25.963],[89.577,25.95],[89.568,25.947],[89.545,25.951],[89.541,25.96],[89.536,25.981],[89.53,25.987],[89.519,25.992],[89.489,25.99],[89.466,25.993],[89.459,25.996],[89.439,26.028],[89.424,26.042],[89.419,26.04],[89.414,26.033],[89.409,26.02],[89.405,26.003],[89.39,25.994],[89.38,25.996],[89.352,26.004],[89.335,26.014],[89.313,26.033],[89.274,26.045],[89.25,26.058],[89.26,26.07],[89.23,26.102],[89.21,26.114],[89.17,26.125],[89.159,26.132],[89.133,26.168],[89.139,26.187],[89.14,26.206],[89.134,26.232],[89.124,26.243],[89.101,26.261],[89.1,26.278],[89.118,26.286],[89.146,26.305],[89.138,26.31],[89.096,26.319],[89.084,26.326],[89.081,26.343],[89.084,26.362],[89.104,26.376],[89.083,26.389],[89.061,26.389],[89.038,26.391],[89.019,26.395],[88.999,26.414],[88.951,26.438],[88.936,26.435],[88.919,26.421],[88.906,26.414],[88.888,26.399],[88.884,26.374],[88.902,26.351],[88.913,26.34],[88.94,26.333],[88.96,26.341],[88.976,26.332],[88.976,26.321],[88.971,26.299],[88.971,26.286],[88.978,26.282],[88.986,26.289],[89.01,26.283],[89.032,26.261],[89.044,26.246],[89.046,26.231],[89.035,26.225],[89.017,26.224],[88.958,26.227],[88.941,26.231],[88.93,26.244],[88.912,26.268],[88.9,26.275],[88.885,26.276],[88.87,26.267],[88.859,26.25],[88.858,26.224],[88.855,26.209],[88.847,26.209],[88.83,26.221],[88.814,26.237],[88.807,26.25],[88.806,26.272],[88.812,26.289],[88.748,26.306],[88.753,26.325],[88.747,26.34],[88.722,26.339],[88.7,26.335],[88.685,26.348],[88.699,26.354],[88.694,26.38],[88.69,26.387],[88.669,26.389],[88.649,26.399],[88.627,26.416],[88.617,26.431],[88.613,26.444],[88.601,26.467],[88.592,26.466],[88.583,26.451],[88.589,26.44],[88.585,26.433],[88.57,26.436],[88.557,26.442],[88.546,26.445],[88.537,26.468],[88.52,26.468],[88.516,26.489],[88.506,26.496],[88.491,26.488],[88.484,26.499],[88.479,26.518],[88.449,26.521],[88.426,26.528],[88.42,26.548],[88.419,26.6],[88.413,26.621],[88.372,26.583],[88.364,26.563],[88.352,26.524],[88.341,26.507],[88.325,26.496],[88.313,26.464],[88.316,26.443],[88.331,26.428],[88.349,26.428],[88.355,26.44],[88.359,26.455],[88.367,26.462],[88.384,26.462],[88.405,26.454],[88.41,26.448],[88.411,26.44],[88.429,26.437],[88.451,26.444],[88.465,26.432],[88.475,26.415],[88.479,26.395],[88.503,26.357],[88.493,26.346],[88.48,26.342],[88.469,26.356],[88.442,26.352],[88.429,26.34],[88.396,26.296],[88.367,26.292],[88.349,26.288],[88.337,26.272],[88.333,26.249],[88.338,26.229],[88.345,26.212],[88.328,26.194],[88.299,26.179],[88.258,26.17],[88.226,26.177],[88.216,26.164],[88.217,26.14],[88.185,26.127],[88.172,26.115],[88.159,26.096],[88.15,26.077],[88.165,26.058],[88.172,26.04],[88.169,26.016],[88.159,25.994],[88.119,25.986],[88.115,25.962],[88.107,25.94],[88.081,25.919],[88.077,25.898],[88.079,25.874],[88.086,25.864],[88.089,25.85],[88.086,25.836],[88.088,25.817],[88.102,25.798],[88.134,25.773],[88.149,25.769],[88.167,25.784],[88.174,25.796],[88.198,25.776],[88.214,25.778],[88.22,25.787],[88.223,25.8],[88.238,25.807],[88.254,25.789],[88.264,25.773],[88.285,25.767],[88.309,25.743],[88.318,25.729],[88.338,25.718],[88.36,25.689],[88.384,25.674],[88.41,25.663],[88.427,25.649],[88.433,25.623],[88.427,25.615],[88.438,25.586],[88.486,25.566],[88.496,25.547],[88.501,25.534],[88.51,25.525],[88.523,25.515],[88.547,25.502],[88.562,25.501],[88.581,25.504],[88.606,25.502],[88.622,25.499],[88.645,25.482],[88.67,25.477],[88.681,25.477],[88.698,25.482],[88.721,25.493],[88.736,25.493],[88.749,25.498],[88.756,25.532],[88.773,25.527],[88.782,25.518],[88.797,25.527],[88.804,25.503],[88.81,25.476],[88.811,25.462],[88.811,25.417],[88.815,25.401],[88.834,25.381],[88.87,25.329],[88.914,25.314],[88.958,25.306],[88.967,25.27],[88.99,25.271],[89.035,25.248],[89.07,25.246],[89.111,25.229],[89.143,25.229],[89.182,25.217],[89.175,25.205],[89.175,25.176],[89.184,25.168],[89.212,25.14],[89.227,25.124],[89.247,25.107],[89.291,25.097],[89.33,25.085],[89.352,25.07],[89.377,25.06],[89.466,25.047],[89.51,25.035],[89.551,25.029],[89.582,25.036],[89.606,25.041],[89.636,25.043],[89.672,25.063],[89.673,25.063],[89.676,25.094],[89.685,25.135],[89.708,25.16],[89.721,25.193],[89.743,25.212],[89.773,25.232],[89.779,25.298],[89.766,25.368],[89.79,25.391]]]}},{"type":"Feature","properties":{"name":"Sylhet"},"geometry":{"type":"Polygon","coordinates":[[[91.295,24.003],[91.319,23.999],[91.339,23.993],[91.368,23.992],[91.39,24.011],[91.394,24.017],[91.401,24.047],[91.403,24.062],[91.394,24.087],[91.382,24.117],[91.401,24.134],[91.425,24.132],[91.459,24.117],[91.475,24.107],[91.514,24.091],[91.544,24.082],[91.566,24.08],[91.628,24.087],[91.637,24.119],[91.642,24.154],[91.635,24.209],[91.651,24.215],[91.691,24.19],[91.752,24.16],[91.768,24.16],[91.775,24.171],[91.765,24.2],[91.758,24.231],[91.768,24.243],[91.804,24.231],[91.86,24.193],[91.886,24.18],[91.904,24.186],[91.919,24.204],[91.926,24.22],[91.929,24.245],[91.929,24.264],[91.926,24.29],[91.919,24.328],[91.923,24.342],[91.955,24.355],[91.992,24.352],[92.013,24.367],[91.992,24.397],[92.011,24.403],[92.047,24.398],[92.095,24.396],[92.107,24.403],[92.132,24.411],[92.16,24.422],[92.153,24.443],[92.147,24.477],[92.136,24.508],[92.131,24.531],[92.144,24.548],[92.18,24.577],[92.195,24.598],[92.199,24.614],[92.198,24.638],[92.212,24.656],[92.222,24.683],[92.235,24.721],[92.252,24.738],[92.283,24.775],[92.283,24.827],[92.272,24.849],[92.292,24.871],[92.323,24.878],[92.36,24.88],[92.418,24.881],[92.457,24.884],[92.477,24.892],[92.489,24.926],[92.49,24.954],[92.481,24.976],[92.434,24.995],[92.431,25.026],[92.397,25.051],[92.355,25.07],[92.341,25.093],[92.336,25.107],[92.314,25.1],[92.286,25.102],[92.253,25.111],[92.226,25.124],[92.211,25.14],[92.15,25.174],[92.117,25.197],[92.087,25.213],[92.002,25.193],[91.964,25.188],[91.943,25.189],[91.848,25.176],[91.786,25.183],[91.754,25.184],[91.731,25.18],[91.694,25.158],[91.675,25.151],[91.655,25.154],[91.629,25.162],[91.591,25.179],[91.558,25.172],[91.522,25.149],[91.5,25.15],[91.44,25.168],[91.416,25.181],[91.39,25.193],[91.335,25.179],[91.317,25.195],[91.276,25.216],[91.249,25.216],[91.196,25.205],[91.137,25.205],[91.082,25.201],[91.029,25.198],[91.005,25.191],[90.977,25.172],[90.986,25.115],[90.982,25.094],[90.971,25.061],[90.967,25.011],[90.978,24.97],[91.003,24.911],[91.036,24.903],[91.059,24.893],[91.097,24.881],[91.137,24.87],[91.152,24.839],[91.159,24.817],[91.217,24.817],[91.191,24.783],[91.176,24.758],[91.183,24.743],[91.218,24.729],[91.26,24.693],[91.236,24.658],[91.198,24.642],[91.194,24.64],[91.203,24.629],[91.212,24.594],[91.239,24.564],[91.236,24.533],[91.178,24.505],[91.162,24.483],[91.2,24.47],[91.222,24.486],[91.243,24.464],[91.223,24.432],[91.238,24.415],[91.257,24.4],[91.251,24.392],[91.228,24.382],[91.23,24.366],[91.241,24.343],[91.23,24.334],[91.199,24.326],[91.175,24.306],[91.201,24.282],[91.215,24.244],[91.258,24.244],[91.29,24.238],[91.31,24.231],[91.307,24.207],[91.291,24.18],[91.285,24.153],[91.285,24.117],[91.291,24.085],[91.307,24.063],[91.31,24.043],[91.295,24.003]]]}},{"type":"Feature","properties":{"name":"Khulna"},"geometry":{"type":"MultiPolygon","coordinates":[[[[89.357,21.689],[89.362,21.707],[89.35,21.724],[89.348,21.731],[89.33,21.751],[89.317,21.749],[89.319,21.712],[89.33,21.698],[89.347,21.687],[89.357,21.689]]],[[[89.905,22.849],[89.872,22.84],[89.856,22.844],[89.834,22.854],[89.817,22.875],[89.81,22.893],[89.81,22.912],[89.813,22.927],[89.813,22.945],[89.802,22.964],[89.787,22.984],[89.779,22.997],[89.752,23.014],[89.737,23.055],[89.72,23.071],[89.695,23.089],[89.678,23.109],[89.682,23.12],[89.699,23.127],[89.719,23.125],[89.731,23.127],[89.752,23.141],[89.74,23.17],[89.735,23.166],[89.69,23.172],[89.693,23.207],[89.675,23.225],[89.647,23.23],[89.631,23.235],[89.63,23.249],[89.646,23.264],[89.654,23.276],[89.626,23.284],[89.613,23.296],[89.606,23.313],[89.604,23.326],[89.597,23.344],[89.582,23.361],[89.588,23.379],[89.582,23.392],[89.589,23.404],[89.594,23.42],[89.592,23.446],[89.587,23.47],[89.572,23.482],[89.559,23.488],[89.54,23.493],[89.523,23.493],[89.503,23.5],[89.497,23.516],[89.5,23.525],[89.508,23.531],[89.508,23.544],[89.424,23.676],[89.381,23.663],[89.33,23.689],[89.306,23.726],[89.306,23.753],[89.325,23.787],[89.327,23.829],[89.313,23.864],[89.259,23.891],[89.255,23.912],[89.255,23.912],[89.254,23.922],[89.254,23.956],[89.208,23.966],[89.203,23.951],[89.197,23.932],[89.185,23.932],[89.151,23.938],[89.091,23.964],[89.041,24.037],[89.022,24.075],[88.995,24.113],[88.974,24.13],[88.91,24.131],[88.869,24.122],[88.807,24.132],[88.779,24.151],[88.753,24.183],[88.711,24.188],[88.698,24.166],[88.699,24.136],[88.706,24.096],[88.735,24.072],[88.744,24.054],[88.729,24.018],[88.734,23.976],[88.746,23.925],[88.736,23.912],[88.71,23.902],[88.662,23.874],[88.641,23.874],[88.624,23.889],[88.609,23.887],[88.592,23.869],[88.61,23.837],[88.614,23.806],[88.601,23.793],[88.575,23.787],[88.579,23.775],[88.595,23.754],[88.582,23.729],[88.573,23.709],[88.58,23.695],[88.586,23.672],[88.556,23.667],[88.577,23.64],[88.64,23.603],[88.701,23.532],[88.761,23.495],[88.778,23.458],[88.741,23.412],[88.728,23.323],[88.729,23.264],[88.755,23.245],[88.791,23.228],[88.811,23.228],[88.811,23.25],[88.83,23.252],[88.928,23.216],[88.955,23.211],[88.972,23.206],[88.966,23.189],[88.957,23.167],[88.927,23.133],[88.873,23.11],[88.874,23.084],[88.902,23.037],[88.867,22.981],[88.866,22.956],[88.867,22.946],[88.9,22.925],[88.869,22.909],[88.938,22.866],[88.957,22.842],[88.953,22.82],[88.921,22.775],[88.918,22.741],[88.954,22.705],[88.964,22.698],[88.958,22.671],[88.935,22.648],[88.943,22.63],[88.966,22.603],[88.957,22.585],[88.958,22.558],[88.981,22.535],[89.006,22.468],[89.005,22.44],[88.994,22.361],[89.008,22.294],[89.036,22.257],[89.061,22.235],[89.085,22.207],[89.096,22.157],[89.086,22.144],[89.061,22.121],[89.036,22.094],[89.052,22.06],[89.087,22.01],[89.098,21.987],[89.098,21.897],[89.149,21.787],[89.168,21.781],[89.203,21.778],[89.216,21.763],[89.214,21.728],[89.237,21.71],[89.24,21.698],[89.218,21.677],[89.204,21.654],[89.21,21.635],[89.225,21.623],[89.249,21.625],[89.269,21.635],[89.3,21.643],[89.303,21.66],[89.293,21.685],[89.298,21.69],[89.3,21.709],[89.298,21.76],[89.302,21.785],[89.326,21.825],[89.328,21.841],[89.34,21.893],[89.376,21.897],[89.374,21.876],[89.346,21.819],[89.352,21.801],[89.365,21.788],[89.378,21.771],[89.401,21.727],[89.408,21.705],[89.438,21.71],[89.451,21.723],[89.46,21.74],[89.474,21.753],[89.481,21.764],[89.494,21.791],[89.466,21.815],[89.455,21.835],[89.472,21.855],[89.483,21.875],[89.511,21.913],[89.535,21.996],[89.556,21.99],[89.562,21.931],[89.552,21.883],[89.545,21.833],[89.545,21.775],[89.573,21.727],[89.584,21.699],[89.625,21.707],[89.618,21.735],[89.605,21.751],[89.7,21.753],[89.711,21.773],[89.687,21.793],[89.67,21.825],[89.689,21.825],[89.723,21.819],[89.809,21.815],[89.852,21.825],[89.874,21.859],[89.87,21.93],[89.864,21.949],[89.864,21.977],[89.873,22.001],[89.865,22.056],[89.865,22.085],[89.896,22.109],[89.896,22.156],[89.899,22.201],[89.9,22.229],[89.887,22.251],[89.875,22.283],[89.898,22.313],[89.91,22.336],[89.905,22.384],[89.919,22.422],[89.94,22.437],[89.961,22.463],[89.942,22.493],[89.963,22.508],[89.981,22.538],[89.977,22.574],[89.961,22.604],[89.961,22.634],[89.958,22.674],[89.94,22.691],[89.896,22.711],[89.905,22.732],[89.94,22.766],[89.942,22.824],[89.946,22.834],[89.945,22.834],[89.905,22.849]]]]}},{"type":"Feature","properties":{"name":"Barishal"},"geometry":{"type":"MultiPolygon","coordinates":[[[[90.551,21.847],[90.558,21.856],[90.567,21.871],[90.572,21.885],[90.573,21.904],[90.567,21.926],[90.558,21.948],[90.55,21.941],[90.528,21.915],[90.512,21.89],[90.509,21.877],[90.519,21.852],[90.536,21.845],[90.551,21.847]]],[[[90.662,21.905],[90.666,21.918],[90.663,21.93],[90.655,21.94],[90.645,21.949],[90.638,21.945],[90.623,21.926],[90.623,21.916],[90.638,21.906],[90.652,21.899],[90.662,21.905]]],[[[90.719,21.959],[90.724,21.97],[90.717,21.978],[90.702,21.988],[90.694,21.982],[90.689,21.973],[90.689,21.964],[90.695,21.958],[90.71,21.957],[90.719,21.959]]],[[[90.468,21.934],[90.477,21.966],[90.475,21.995],[90.464,22.026],[90.432,22.049],[90.397,22.06],[90.376,22.025],[90.362,21.981],[90.351,21.957],[90.347,21.937],[90.324,21.868],[90.317,21.837],[90.324,21.819],[90.344,21.83],[90.351,21.854],[90.375,21.916],[90.381,21.92],[90.397,21.916],[90.435,21.901],[90.453,21.91],[90.468,21.934]]],[[[90.521,21.958],[90.533,21.977],[90.551,21.992],[90.565,22.016],[90.567,22.036],[90.561,22.054],[90.544,22.065],[90.524,22.058],[90.507,22.036],[90.505,22.01],[90.512,21.956],[90.521,21.958]]],[[[90.963,22.167],[90.961,22.209],[90.959,22.235],[90.97,22.269],[90.986,22.308],[90.99,22.33],[90.988,22.341],[90.97,22.36],[90.967,22.359],[90.959,22.326],[90.944,22.293],[90.928,22.232],[90.922,22.187],[90.95,22.131],[90.961,22.13],[90.963,22.167]]],[[[90.637,21.997],[90.65,22.003],[90.667,22.015],[90.687,22.025],[90.732,22.067],[90.757,22.076],[90.778,22.089],[90.793,22.112],[90.805,22.127],[90.818,22.134],[90.833,22.159],[90.837,22.203],[90.838,22.256],[90.845,22.288],[90.86,22.317],[90.869,22.342],[90.866,22.392],[90.884,22.43],[90.891,22.487],[90.845,22.529],[90.835,22.562],[90.806,22.591],[90.775,22.616],[90.741,22.749],[90.727,22.787],[90.706,22.787],[90.709,22.786],[90.662,22.78],[90.601,22.729],[90.574,22.685],[90.568,22.66],[90.579,22.627],[90.611,22.592],[90.628,22.564],[90.634,22.519],[90.645,22.482],[90.661,22.453],[90.676,22.399],[90.678,22.365],[90.677,22.263],[90.669,22.227],[90.632,22.181],[90.603,22.153],[90.597,22.126],[90.614,22.107],[90.623,22.09],[90.615,22.06],[90.609,22.045],[90.617,22.023],[90.618,22.002],[90.625,21.996],[90.637,21.997]]],[[[89.946,22.834],[89.942,22.824],[89.94,22.766],[89.905,22.732],[89.896,22.711],[89.94,22.691],[89.958,22.674],[89.961,22.634],[89.961,22.604],[89.977,22.574],[89.981,22.538],[89.963,22.508],[89.942,22.493],[89.961,22.463],[89.94,22.437],[89.919,22.422],[89.905,22.384],[89.91,22.336],[89.898,22.313],[89.875,22.283],[89.887,22.251],[89.9,22.229],[89.899,22.201],[89.919,22.172],[89.93,22.126],[89.927,22.098],[89.93,22.064],[89.952,22.018],[89.958,21.996],[89.98,21.986],[89.987,21.992],[89.989,22.048],[90.015,22.079],[90.048,22.087],[90.018,22.01],[90.022,21.995],[90.077,21.977],[90.083,21.962],[90.072,21.949],[90.033,21.941],[90.026,21.935],[90.027,21.892],[90.04,21.879],[90.043,21.864],[90.03,21.842],[90.064,21.829],[90.091,21.825],[90.111,21.815],[90.119,21.802],[90.142,21.793],[90.166,21.787],[90.187,21.788],[90.216,21.795],[90.234,21.808],[90.253,21.811],[90.268,21.822],[90.268,21.846],[90.271,21.877],[90.287,21.899],[90.294,21.914],[90.301,21.919],[90.323,21.941],[90.323,22.008],[90.33,22.027],[90.375,22.076],[90.39,22.094],[90.418,22.091],[90.45,22.084],[90.483,22.079],[90.514,22.076],[90.534,22.089],[90.559,22.11],[90.557,22.145],[90.602,22.269],[90.647,22.384],[90.642,22.436],[90.619,22.448],[90.589,22.459],[90.584,22.503],[90.589,22.535],[90.545,22.57],[90.524,22.585],[90.513,22.625],[90.508,22.654],[90.501,22.676],[90.506,22.7],[90.533,22.707],[90.619,22.786],[90.679,22.836],[90.681,22.86],[90.673,22.885],[90.636,22.908],[90.549,22.947],[90.507,22.964],[90.476,22.981],[90.415,23.024],[90.415,23.027],[90.407,23.024],[90.377,22.998],[90.34,22.977],[90.282,22.977],[90.229,22.99],[90.211,23.037],[90.174,23.045],[90.12,23.024],[90.106,23.001],[90.062,22.958],[90.042,22.911],[90.025,22.896],[89.991,22.879],[89.949,22.845],[89.946,22.834]]]]}}]}
+;</script>
+<script>
+/* ================= sign in ================= */
+(function(){
+  var HASH='4ee8bd52c34298ad4dd9036ae0fa80db18c7e93a305d8c789ed6fb6c1c458bb4', KEY='investor-auth';
+  var login=document.getElementById('login'), app=document.getElementById('app');
+  function hex(buf){return Array.prototype.map.call(new Uint8Array(buf),function(b){return ('0'+b.toString(16)).slice(-2);}).join('');}
+  function sha(s){return crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)).then(hex);}
+  function open(){ login.hidden=true; app.hidden=false; stopBg(); window.startDashboard(); }
+  var ok=false; try{ ok=sessionStorage.getItem(KEY)===HASH; }catch(e){}
+  document.getElementById('eye').addEventListener('click',function(){
+    var p=document.getElementById('pass'), show=p.type==='password'; p.type=show?'text':'password';
+    this.textContent=show?'Hide':'Show'; this.setAttribute('aria-label',show?'Hide password':'Show password');
+  });
+  document.getElementById('loginForm').addEventListener('submit',function(e){
+    e.preventDefault();
+    var u=document.getElementById('user').value.trim().toLowerCase(), p=document.getElementById('pass').value;
+    var btn=document.getElementById('go'), msg=document.getElementById('msg'), card=this;
+    btn.disabled=true; msg.textContent='';
+    sha(u+':'+p).then(function(h){
+      btn.disabled=false;
+      if(h===HASH){ try{sessionStorage.setItem(KEY,HASH);}catch(e){} open(); }
+      else{ msg.textContent='Username or password is wrong. Check and try again.'; card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake'); document.getElementById('pass').select(); }
+    }).catch(function(){ btn.disabled=false; msg.textContent='Sign-in needs a secure (https) page. Open the dashboard from its https address.'; });
+  });
+  document.getElementById('logout').addEventListener('click',function(){ try{sessionStorage.removeItem(KEY);}catch(e){} location.reload(); });
+
+  /* background: a slow drift of shipping containers along faint trade routes */
+  var cv=document.getElementById('bg'), cx=cv.getContext('2d'), boxes=[], routes=[], raf=0, W=0, H=0, mx=0, my=0, tmx=0, tmy=0, T=0;
+  var COLORS=['#F2A65A','#7DB7E8','#D9853F','#5E8FBF','#E7C36A','#4FB3A9'];
+  var reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches, SPEED=reduce?0:1;
+  function rnd(a,b){return a+Math.random()*(b-a);}
+  function size(){ var dpr=Math.min(window.devicePixelRatio||1,2); W=cv.clientWidth; H=cv.clientHeight; cv.width=W*dpr; cv.height=H*dpr; cx.setTransform(dpr,0,0,dpr,0,0); }
+  function make(){
+    boxes=[]; routes=[];
+    var n=Math.round(Math.min(46,Math.max(18,W*H/30000)));
+    for(var i=0;i<n;i++){ var z=rnd(.35,1), w=rnd(46,96)*z; boxes.push({x:rnd(-100,W),y:rnd(0,H),w:w,h:w*rnd(.36,.44),z:z,vx:rnd(.12,.42),c:COLORS[i%COLORS.length],o:rnd(.14,.34),tilt:rnd(-.05,.05)}); }
+    for(var r=0;r<5;r++){ routes.push({y0:rnd(.1,.9)*H,y1:rnd(.1,.9)*H,amp:rnd(30,90),ph:rnd(0,6)}); }
+  }
+  function draw(){
+    cx.clearRect(0,0,W,H);
+    cx.setLineDash([3,9]); cx.lineWidth=1;
+    routes.forEach(function(r){ cx.strokeStyle='rgba(152,164,185,.16)'; cx.beginPath();
+      for(var x=0;x<=W;x+=24){ var t=x/W, y=r.y0+(r.y1-r.y0)*t+Math.sin(t*5+r.ph+T*.002)*r.amp; x?cx.lineTo(x,y):cx.moveTo(x,y); } cx.stroke(); });
+    cx.setLineDash([]);
+    boxes.forEach(function(b){
+      cx.save(); cx.translate(b.x+mx*b.z*28,b.y+my*b.z*28); cx.rotate(b.tilt); cx.globalAlpha=b.o;
+      cx.fillStyle=b.c; cx.fillRect(-b.w/2,-b.h/2,b.w,b.h);
+      cx.globalAlpha=b.o*1.1; cx.strokeStyle='rgba(11,14,19,.55)'; cx.lineWidth=1.2;
+      for(var k=-b.w/2+6;k<b.w/2-3;k+=6){ cx.beginPath(); cx.moveTo(k,-b.h/2+3); cx.lineTo(k,b.h/2-3); cx.stroke(); }
+      cx.restore();
+    });
+  }
+  function step(){ T+=1; mx+=(tmx-mx)*.05; my+=(tmy-my)*.05;
+    boxes.forEach(function(b){ b.x+=b.vx*b.z*SPEED; if(b.x-b.w>W+40){ b.x=-b.w-20; b.y=rnd(0,H); } });
+    draw(); raf=requestAnimationFrame(step); }
+  function stopBg(){ cancelAnimationFrame(raf); raf=0; }
+  window.addEventListener('mousemove',function(e){ if(!W)return; tmx=(e.clientX/W-.5); tmy=(e.clientY/H-.5); });
+  window.addEventListener('resize',function(){ if(login.hidden)return; size(); make(); });
+  document.addEventListener('visibilitychange',function(){ if(login.hidden)return; if(document.hidden) stopBg(); else if(!raf) step(); });
+  if(ok){ window.addEventListener('DOMContentLoaded',open); }
+  else { size(); make(); step(); document.getElementById('user').focus(); }
+})();
+
+/* ================= dashboard ================= */
+window.startDashboard=function(){
+  if(window.__started) return; window.__started=true;
+  if(window.__DATA__){ run(); return; }
+  fetch('data/data.json?t='+Date.now()).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function(d){ window.__DATA__=d; run(); })
+    .catch(function(){ var e=document.createElement('p'); e.className='msg'; e.style.padding='16px';
+      e.textContent='Could not load data/data.json. If this is a new site, run the GitHub Action once (Actions, Update dashboard data, Run workflow).';
+      document.querySelector('.wrap').prepend(e); });
+};
+function run(){
+  var D=window.__DATA__, ALL=D.records, SCH={}; D.schema.forEach(function(s){ SCH[s.key]=s; });
+  var $=function(id){return document.getElementById(id);};
+  var FOR='#F2A65A', DOM='#7DB7E8', INK='#ECEFF5', MUTED='#98A4B9', FAINT='#67738B', LINE='#243045', GRID='#1A2332', CARD='#141A25';
+  var SEVC=['#3B4659','#6E8DAE','#E7C36A','#EF8A4B','#E0514C'], SEVL=['None','Minor','Moderate','Serious','Very serious'];
+  var GROUPS=['Foreign or JV','Domestic'], GCOL={'Foreign or JV':FOR,'Domestic':DOM};
+  var DIVS=['Barishal','Chattogram','Dhaka','Khulna','Mymensingh','Rajshahi','Rangpur','Sylhet'];
+  var has3D=(function(){ try{ var c=document.createElement('canvas'); return !!(c.getContext('webgl')||c.getContext('experimental-webgl')); }catch(e){ return false; } })();
+  var mode3D=has3D, charts=[], F={grp:'all',zone:'all',div:'all',en:'all'}, R=ALL;
+  echarts.registerMap('BD',BD_DIV);
+  var ISS_BY={}; D.issues.forEach(function(i){ if(i.id){ (ISS_BY[i.id]=ISS_BY[i.id]||[]).push(i); } });
+  var BYID={}; ALL.forEach(function(r){ BYID[r.id]=r; });
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function cap(s){ s=String(s||''); return s.charAt(0).toUpperCase()+s.slice(1); }
+  function pct(a,b){ return b?Math.round(a/b*100):0; }
+  var TT={backgroundColor:'#1A2231',borderColor:LINE,textStyle:{color:INK,fontFamily:'Public Sans'},extraCssText:'max-width:320px;white-space:normal'};
+  var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function fmtDay(s){ var p=s.split('-'); return (+p[2])+' '+M[+p[1]-1]; }
+  function todayDhaka(){ return new Date(Date.now()+6*36e5).toISOString().slice(0,10); }
+  function addDays(s,n){ var x=new Date(s+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+n); return x.toISOString().slice(0,10); }
+  function median(a){ if(!a.length) return null; var s=a.slice().sort(function(x,y){return x-y;}), m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; }
+  function wrapLabel(s,w){ var words=String(s).split(' '), lines=[''], i; for(i=0;i<words.length;i++){ if((lines[lines.length-1]+' '+words[i]).trim().length>w && lines[lines.length-1]){ lines.push(words[i]); } else { lines[lines.length-1]=(lines[lines.length-1]+' '+words[i]).trim(); } } if(lines.length>3){ lines=lines.slice(0,3); lines[2]+='…'; } return lines.join('\n'); }
+  function axis2D(extra){ return Object.assign({axisLine:{lineStyle:{color:LINE}},axisLabel:{color:MUTED},splitLine:{lineStyle:{color:GRID}},axisTick:{show:false}},extra||{}); }
+  function axis3D(){ return {nameTextStyle:{color:MUTED},axisLabel:{color:MUTED,fontSize:11},axisLine:{lineStyle:{color:LINE}},axisPointer:{lineStyle:{color:FAINT}},splitLine:{lineStyle:{color:GRID}},axisTick:{show:false}}; }
+  function light(){ return {main:{intensity:1.15,shadow:true,shadowQuality:'medium',alpha:40,beta:40},ambient:{intensity:.35}}; }
+  function mk(id){ var c=echarts.init($(id)); charts.push(c); return c; }
+  function emptyChart(c,t){ c.setOption({title:{text:t||'No answers for this selection',left:'center',top:'middle',textStyle:{color:MUTED,fontSize:14,fontWeight:400}}}); }
+
+  /* ---------- filters ---------- */
+  function applyFilter(){
+    R=ALL.filter(function(r){
+      if(F.grp!=='all' && r.grp!==F.grp) return false;
+      if(F.zone==='in' && !r.inzone) return false;
+      if(F.zone!=='all' && F.zone!=='in' && r.a.zone!==F.zone) return false;
+      if(F.div!=='all' && r.a.div!==F.div) return false;
+      if(F.en!=='all' && r.enum!==F.en) return false;
+      return true; });
+    var on=(F.grp!=='all')+(F.zone!=='all')+(F.div!=='all')+(F.en!=='all');
+    $('fnote').textContent=on?('Showing '+R.length+' of '+ALL.length+' firms'):'';
+    draw();
+  }
+  function fillSelect(id,opts,all){ $(id).innerHTML='<option value="all">'+all+'</option>'+opts.map(function(o){ return '<option value="'+esc(o[0])+'">'+esc(o[1])+'</option>'; }).join(''); }
+  fillSelect('fzone',[['in','Inside any zone']].concat(SCH.zone.options.map(function(o){return [o,cap(o)];})),'All zones');
+  fillSelect('fdiv',DIVS.map(function(d){return [d,d];}),'All divisions');
+  var ENS=[]; ALL.forEach(function(r){ if(ENS.indexOf(r.enum)<0) ENS.push(r.enum); });
+  fillSelect('fen',ENS.map(function(e){return [e,e];}),'All enumerators');
+  $('fzone').addEventListener('change',function(){ F.zone=this.value; applyFilter(); });
+  $('fdiv').addEventListener('change',function(){ F.div=this.value; applyFilter(); });
+  $('fen').addEventListener('change',function(){ F.en=this.value; applyFilter(); });
+  [].forEach.call(document.querySelectorAll('.grpb'),function(b){ b.addEventListener('click',function(){
+    F.grp=b.getAttribute('data-g'); [].forEach.call(document.querySelectorAll('.grpb'),function(x){ x.setAttribute('aria-pressed',x===b); }); applyFilter(); }); });
+
+  /* ---------- counting ---------- */
+  function tally(key,recs){
+    var q=SCH[key], out={}, n={all:0,'Foreign or JV':0,'Domestic':0};
+    q.options.forEach(function(o){ out[o]={all:0,'Foreign or JV':0,'Domestic':0}; });
+    recs.forEach(function(r){ var v=r.a[key]; if(v==null) return; n.all++; n[r.grp]++;
+      (Array.isArray(v)?v:[v]).forEach(function(x){ if(!out[x]) out[x]={all:0,'Foreign or JV':0,'Domestic':0}; out[x].all++; out[x][r.grp]++; }); });
+    var opts=Object.keys(out).filter(function(o){ return out[o].all>0 || q.type==='multi'; });
+    return {q:q,opts:opts,c:out,n:n};
+  }
+
+  /* 3D bars (same look as the SERWE and Remittance monitors) */
+  function bar3D(el,xs,ys,cells,opts){
+    opts=opts||{};
+    el.setOption({tooltip:Object.assign({formatter:function(p){ return esc(xs[p.value[0]]).replace(/\n/g,' ')+(ys.length>1?' · '+esc(ys[p.value[1]]):'')+': <b>'+p.value[2]+'</b>'; }},TT),
+      xAxis3D:Object.assign(axis3D(),{type:'category',data:xs,axisLabel:{color:MUTED,fontSize:11,interval:opts.interval||0}}),
+      yAxis3D:Object.assign(axis3D(),{type:'category',data:ys,axisLabel:{color:MUTED,fontSize:11}}),
+      zAxis3D:Object.assign(axis3D(),{type:'value',minInterval:1}),
+      grid3D:{boxWidth:opts.boxWidth||Math.min(220,Math.max(90,xs.length*26)),boxDepth:opts.boxDepth||(ys.length>1?44:22),boxHeight:opts.boxHeight||70,
+        environment:'none',light:light(),postEffect:{enable:false},
+        viewControl:{alpha:opts.alpha||22,beta:opts.beta||26,distance:opts.distance||200,autoRotate:false,zoomSensitivity:0.6,minAlpha:5,maxAlpha:80},axisPointer:{show:false}},
+      series:[{type:'bar3D',shading:'lambert',bevelSize:0.35,bevelSmoothness:3,
+        data:cells.map(function(c){return {value:[c[0],c[1],c[2]],itemStyle:{color:c[3],opacity:1}};}),
+        emphasis:{label:{show:true,formatter:function(p){return p.value[2];},textStyle:{color:'#fff',fontSize:13,backgroundColor:'rgba(11,14,19,.85)',padding:[2,6],borderRadius:3}},itemStyle:{color:'#ffffff'}}}]});
+  }
+  /* one categorical question, split by ownership group */
+  function groupChart(id,key,opts){
+    opts=opts||{}; var c=mk(id), t=tally(key,R);
+    if(!t.n.all){ emptyChart(c); return; }
+    var labs=t.opts.map(function(o){ return opts.labels&&opts.labels[o]||cap(o); });
+    if(mode3D && opts.allow3D!==false){
+      var cells=[]; t.opts.forEach(function(o,i){ GROUPS.forEach(function(g,j){ cells.push([i,j,t.c[o][g],GCOL[g]]); }); });
+      bar3D(c,labs.map(function(l){return wrapLabel(l,14);}),GROUPS,cells,{boxWidth:Math.min(200,Math.max(80,labs.length*30)),distance:opts.distance||180});
+      return;
+    }
+    var rev=t.opts.slice().reverse(), rl=labs.slice().reverse(), narrow=$(id).clientWidth<520, base=opts.base||'answer';
+    var h=Math.max(opts.minH||200,rev.length*(opts.rowH||40)+36); $(id).style.height=h+'px'; c.resize();
+    c.setOption({tooltip:Object.assign({trigger:'axis',axisPointer:{type:'shadow'},formatter:function(ps){ var o=rev[ps[0].dataIndex], x=t.c[o];
+        return '<b>'+esc(rl[ps[0].dataIndex])+'</b><br>All: '+x.all+' ('+pct(x.all,t.n.all)+'% of '+t.n.all+')<br><span style="color:'+FOR+'">Foreign or JV: '+x['Foreign or JV']+' ('+pct(x['Foreign or JV'],t.n['Foreign or JV'])+'%)</span><br><span style="color:'+DOM+'">Domestic: '+x['Domestic']+' ('+pct(x['Domestic'],t.n['Domestic'])+'%)</span>'; }},TT),
+      grid:{left:8,right:76,top:6,bottom:6,containLabel:true},
+      yAxis:axis2D({type:'category',data:rl.map(function(l){return wrapLabel(l,narrow?20:opts.wrap||30);}),splitLine:{show:false},axisLabel:{color:INK,fontSize:12,lineHeight:15}}),
+      xAxis:axis2D({type:'value',minInterval:1}),
+      series:GROUPS.map(function(g,i){ return {name:g,type:'bar',stack:'g',barMaxWidth:22,itemStyle:{color:GCOL[g],borderRadius:i?[0,3,3,0]:0},data:rev.map(function(o){return t.c[o][g];}),
+        label:i?{show:true,position:'right',color:MUTED,fontSize:12,formatter:function(p){ var x=t.c[rev[p.dataIndex]]; return x.all+'  ('+pct(x.all,t.n.all)+'%)'; }}:{show:false}}; })});
+    c.on('finished',function(){});
+  }
+
+  /* severity grid: 100% stacked bars, sorted by serious + very serious */
+  function sevGrid(gridKey,chartId,tableId){
+    var keys=D.schema.filter(function(s){return s.grid===gridKey;}).map(function(s){return s.key;});
+    var rows=keys.map(function(k){ var t=tally(k,R), cnt=SEVL.map(function(_,i){ var o=['none','minor','moderate','serious','very serious'][i]; return t.c[o]?t.c[o].all:0; });
+      function sp(g){ var n=t.n[g]; if(!n) return null; var s=(t.c.serious?t.c.serious[g]:0)+(t.c['very serious']?t.c['very serious'][g]:0); return Math.round(s/n*100); }
+      return {k:k,label:SCH[k].label,n:t.n.all,cnt:cnt,all:sp('all'),f:sp('Foreign or JV'),d:sp('Domestic')}; });
+    rows.sort(function(a,b){ return (b.all||0)-(a.all||0) || (b.cnt[4]-a.cnt[4]); });
+    var c=mk(chartId);
+    if(!R.length){ emptyChart(c); $(tableId).tBodies[0].innerHTML=''; return; }
+    var rev=rows.slice().reverse(), narrow=$(chartId).clientWidth<520;
+    c.setOption({tooltip:Object.assign({trigger:'axis',axisPointer:{type:'shadow'},formatter:function(ps){ var r=rev[ps[0].dataIndex];
+        return '<b>'+esc(r.label)+'</b><br>'+SEVL.map(function(l,i){ return '<span style="color:'+SEVC[i]+'">■</span> '+l+': '+r.cnt[i]+' ('+pct(r.cnt[i],r.n)+'%)'; }).reverse().join('<br>'); }},TT),
+      grid:{left:8,right:16,top:6,bottom:24,containLabel:true},
+      xAxis:axis2D({type:'value',max:100,axisLabel:{color:MUTED,formatter:'{value}%'}}),
+      yAxis:axis2D({type:'category',data:rev.map(function(r){return wrapLabel(r.label,narrow?22:34);}),splitLine:{show:false},axisLabel:{color:INK,fontSize:12,lineHeight:15}}),
+      series:SEVL.map(function(l,i){ return {name:l,type:'bar',stack:'s',barMaxWidth:24,itemStyle:{color:SEVC[i]},
+        label:{show:true,color:i===0?'#C9D2E0':'#141A25',fontSize:11,fontWeight:600,formatter:function(p){ return p.value>=9?Math.round(p.value)+'%':''; }},
+        data:rev.map(function(r){ return r.n?r.cnt[i]/r.n*100:0; })}; })});
+    function cell(v){ return v==null?'<td class="num muted">–</td>':'<td class="num">'+v+'%</td>'; }
+    $(tableId).tBodies[0].innerHTML=rows.map(function(r){ return '<tr><td>'+esc(r.label)+'<div class="bar"><span style="width:'+(r.all||0)+'%"></span></div></td>'+cell(r.all)+cell(r.f)+cell(r.d)+'</tr>'; }).join('');
+  }
+  $('sevkey').innerHTML=SEVL.map(function(l,i){ return '<span><i style="background:'+SEVC[i]+'"></i>'+l+'</span>'; }).join('');
+
+  /* multi-select as % of firms */
+  function multiChart(id,key){
+    var c=mk(id), t=tally(key,R), q=SCH[key];
+    if(!t.n.all){ emptyChart(c); return; }
+    var opts=t.opts.filter(function(o){ return o!=='None selected'; }).sort(function(a,b){ return t.c[b].all-t.c[a].all; });
+    var none=opts.indexOf('None of these'); if(none>=0){ opts.splice(none,1); opts.push('None of these'); }
+    var rev=opts.slice().reverse(), narrow=$(id).clientWidth<520;
+    c.setOption({tooltip:Object.assign({trigger:'axis',axisPointer:{type:'shadow'},formatter:function(ps){ var o=rev[ps[0].dataIndex], x=t.c[o];
+        return '<b>'+esc(o)+'</b><br>All: '+x.all+' of '+t.n.all+' firms ('+pct(x.all,t.n.all)+'%)<br><span style="color:'+FOR+'">Foreign or JV: '+x['Foreign or JV']+' of '+t.n['Foreign or JV']+'</span><br><span style="color:'+DOM+'">Domestic: '+x['Domestic']+' of '+t.n['Domestic']+'</span>'; }},TT),
+      legend:{show:false},grid:{left:8,right:40,top:6,bottom:6,containLabel:true},
+      xAxis:axis2D({type:'value',max:100,axisLabel:{color:MUTED,formatter:'{value}%'}}),
+      yAxis:axis2D({type:'category',data:rev.map(function(o){return wrapLabel(o,narrow?20:30);}),splitLine:{show:false},axisLabel:{color:INK,fontSize:12,lineHeight:15}}),
+      series:GROUPS.map(function(g){ return {name:g,type:'bar',barGap:'10%',barMaxWidth:12,itemStyle:{color:GCOL[g],borderRadius:[0,3,3,0]},
+        label:{show:true,position:'right',color:MUTED,fontSize:11,formatter:function(p){ return t.n[g]?Math.round(p.value)+'%':''; }},
+        data:rev.map(function(o){ return t.n[g]?t.c[o][g]/t.n[g]*100:0; })}; })});
+  }
+
+  /* ---------- map ---------- */
+  function shade(v,max){ if(!v) return '#1E2738'; var a=[0x2B,0x4A,0x6E], b=[0xF2,0xA6,0x5A], f=Math.sqrt(v/Math.max(1,max)); return 'rgb('+a.map(function(x,i){return Math.round(x+(b[i]-x)*f);}).join(',')+')'; }
+  function drawMap(){
+    var cnt={}, gc={}; DIVS.forEach(function(d){ cnt[d]=0; gc[d]={'Foreign or JV':0,'Domestic':0}; });
+    R.forEach(function(r){ if(cnt[r.a.div]!=null){ cnt[r.a.div]++; gc[r.a.div][r.grp]++; } });
+    var max=Math.max.apply(null,DIVS.map(function(d){return cnt[d];}).concat([1])), c=mk('c-map');
+    function tip(n){ return '<b>'+esc(n)+'</b><br>Interviews: '+cnt[n]+'<br><span style="color:'+FOR+'">Foreign or JV '+gc[n]['Foreign or JV']+'</span> · <span style="color:'+DOM+'">Domestic '+gc[n]['Domestic']+'</span>'; }
+    if(mode3D){
+      c.setOption({tooltip:Object.assign({formatter:function(p){ return tip(p.name); }},TT),
+        series:[{type:'map3D',map:'BD',boxWidth:71,boxDepth:100,boxHeight:12,regionHeight:1.2,shading:'lambert',environment:'none',
+          light:{main:{intensity:.85,shadow:true,shadowQuality:'high',alpha:50,beta:25},ambient:{intensity:.55}},
+          viewControl:{distance:100,alpha:62,beta:0,center:[0,0,0],minAlpha:10,maxAlpha:85,zoomSensitivity:0.6},postEffect:{enable:false},
+          itemStyle:{borderColor:'#4A5A78',borderWidth:1},
+          label:{show:true,distance:2,formatter:function(p){ return p.name+'  '+cnt[p.name]; },textStyle:{color:'#fff',fontSize:12,fontWeight:600,backgroundColor:'rgba(11,14,19,.75)',padding:[3,7],borderRadius:4}},
+          emphasis:{label:{show:true},itemStyle:{color:'#FFD2A1'}},
+          data:DIVS.map(function(n){ var v=cnt[n]; return {name:n,value:v,height:1.2+(v/max)*9,itemStyle:{color:shade(v,max),opacity:1}}; })}]});
+    } else {
+      var pts=R.filter(function(r){return r.gps;});
+      c.setOption({tooltip:Object.assign({trigger:'item',formatter:function(p){ if(p.seriesType==='scatter'){ var r=pts[p.dataIndex]; return '<b>'+esc(r.firm)+'</b><br>Form says '+esc(r.a.div)+(r.gps_prec===0?'<br><span style="color:#F2C14E">GPS precision 0</span>':''); } return tip(p.name); }},TT),
+        geo:{map:'BD',roam:true,aspectScale:0.92,layoutSize:'96%',label:{show:true,color:INK,fontWeight:600,fontSize:11,formatter:function(p){return p.name+'\n'+cnt[p.name];}},
+          itemStyle:{borderColor:'#4A5A78',borderWidth:1,areaColor:'#1E2738'},emphasis:{label:{color:'#0B0E13'},itemStyle:{areaColor:'#FFD2A1'}},select:{disabled:true},
+          regions:DIVS.map(function(n){ return {name:n,itemStyle:{areaColor:shade(cnt[n],max)}}; })},
+        series:[{type:'scatter',coordinateSystem:'geo',symbolSize:9,data:pts.map(function(r){ return {value:r.gps,itemStyle:{color:GCOL[r.grp],borderColor:'#0B0E13',borderWidth:1.2}}; }),z:5}]});
+    }
+    c.on('click',function(p){ if(p.seriesType==='scatter'){ openCase(R.filter(function(r){return r.gps;})[p.dataIndex].id); return; } if(DIVS.indexOf(p.name)>=0) setDiv(F.div===p.name?'all':p.name); });
+    var list=DIVS.slice().sort(function(a,b){return cnt[b]-cnt[a];});
+    $('rank').innerHTML=list.map(function(n){ return '<li data-d="'+n+'" class="'+(cnt[n]?'':'zero')+(F.div===n?' on':'')+'" tabindex="0"><span class="sw" style="background:'+shade(cnt[n],max)+'"></span><span class="nm">'+esc(n)+'</span><span class="ct">'+cnt[n]+'</span><span class="sp">'+gc[n]['Foreign or JV']+' foreign/JV · '+gc[n]['Domestic']+' domestic</span></li>'; }).join('');
+  }
+  function setDiv(d){ F.div=d; $('fdiv').value=d; applyFilter(); }
+  $('rank').addEventListener('click',function(e){ var li=e.target.closest('li'); if(li) setDiv(F.div===li.dataset.d?'all':li.dataset.d); });
+  $('rank').addEventListener('keydown',function(e){ var li=e.target.closest('li'); if(li&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); setDiv(F.div===li.dataset.d?'all':li.dataset.d); } });
+
+  /* ---------- progress ---------- */
+  var period='day';
+  function weekStart(d){ var x=new Date(d+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()-((x.getUTCDay()+1)%7)); return x.toISOString().slice(0,10); }
+  function dayRange(){ var ds=ALL.map(function(r){return r.date;}).sort(), a=ds[0], b=ds[ds.length-1], out=[]; for(var d=a;d<=b;d=addDays(d,1)) out.push(d); return out; }
+  function drawTrend(){
+    var c=mk('c-trend'), days=dayRange(), buckets={}, order=[];
+    days.forEach(function(day){ var k=period==='day'?day:period==='week'?weekStart(day):day.slice(0,7); if(!buckets[k]){ buckets[k]={f:0,d:0}; order.push(k); } });
+    R.forEach(function(r){ var k=period==='day'?r.date:period==='week'?weekStart(r.date):r.date.slice(0,7); if(buckets[k]) buckets[k][r.grp==='Domestic'?'d':'f']++; });
+    var cum=0, tot=order.map(function(k){ cum+=buckets[k].f+buckets[k].d; return cum; });
+    var labels=order.map(function(k){ if(period==='month') return M[+k.slice(5,7)-1]+' '+k.slice(0,4); var s=fmtDay(k); return period==='week'?'Week of '+s:s; });
+    c.setOption({tooltip:Object.assign({trigger:'axis'},TT),grid:{left:8,right:16,top:24,bottom:8,containLabel:true},
+      xAxis:axis2D({type:'category',boundaryGap:true,data:labels,splitLine:{show:false}}),
+      yAxis:[axis2D({type:'value',minInterval:1,name:'per period',nameTextStyle:{color:FAINT,fontSize:10}}),axis2D({type:'value',minInterval:1,splitLine:{show:false},name:'cumulative',nameTextStyle:{color:FAINT,fontSize:10}})],
+      series:[{name:'Foreign or JV',type:'bar',stack:'g',barMaxWidth:28,itemStyle:{color:FOR},data:order.map(function(k){return buckets[k].f;})},
+              {name:'Domestic',type:'bar',stack:'g',barMaxWidth:28,itemStyle:{color:DOM,borderRadius:[3,3,0,0]},data:order.map(function(k){return buckets[k].d;})},
+              {name:'Total, cumulative',type:'line',yAxisIndex:1,symbol:'circle',symbolSize:7,data:tot,lineStyle:{color:INK,width:2.5},itemStyle:{color:INK},
+               endLabel:{show:true,color:INK,fontFamily:'JetBrains Mono',formatter:function(p){return p.value;}},
+               areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(236,239,245,.14)'},{offset:1,color:'rgba(236,239,245,0)'}])}}]});
+  }
+  [].forEach.call(document.querySelectorAll('.per'),function(b){ b.addEventListener('click',function(){
+    period=b.getAttribute('data-p'); [].forEach.call(document.querySelectorAll('.per'),function(x){ x.setAttribute('aria-pressed',x===b); }); draw(); }); });
+
+  function drawTime(){
+    var c=mk('c-time'), days=dayRange(), tg={}; days.forEach(function(d){ tg[d]={'Foreign or JV':0,'Domestic':0}; });
+    R.forEach(function(r){ if(tg[r.date]) tg[r.date][r.grp]++; });
+    var labels=days.map(fmtDay);
+    if(mode3D){ var cells=[]; days.forEach(function(d,i){ GROUPS.forEach(function(g,j){ cells.push([i,j,tg[d][g],GCOL[g]]); }); });
+      bar3D(c,labels,GROUPS,cells,{boxWidth:200,boxDepth:40,beta:16,distance:175}); return; }
+    c.setOption({tooltip:Object.assign({trigger:'axis',axisPointer:{type:'shadow'}},TT),grid:{left:8,right:12,top:12,bottom:8,containLabel:true},
+      xAxis:axis2D({type:'category',data:labels,splitLine:{show:false}}),yAxis:axis2D({type:'value',minInterval:1}),
+      series:GROUPS.map(function(g,i){return {name:g,type:'bar',stack:'g',barMaxWidth:26,itemStyle:{color:GCOL[g],borderRadius:i?[3,3,0,0]:0},data:days.map(function(d){return tg[d][g];})};})});
+  }
+
+  /* firm size band, derived from permanent workers */
+  var BANDS=['Under 50','50 to 99','100 to 249','250 to 999','1,000 or more'];
+  SCH.size={key:'size',label:'Firm size by permanent workers',type:'single',options:BANDS,section:'A. Firm profile'};
+  ALL.forEach(function(r){ var w=r.a.perm; r.a.size=w==null?null:w<50?BANDS[0]:w<100?BANDS[1]:w<250?BANDS[2]:w<1000?BANDS[3]:BANDS[4]; });
+
+  /* ---------- tables ---------- */
+  var plist='imports';
+  function money(v){ return v==null?'':Number(v).toLocaleString('en-IN',{maximumFractionDigits:0}); }
+  function drawProducts(){
+    var rows=[]; R.forEach(function(r){ (r[plist]||[]).forEach(function(p){ rows.push({p:p,r:r}); }); });
+    rows.sort(function(a,b){ return (b.p.value||-1)-(a.p.value||-1); });
+    $('t-prod').tBodies[0].innerHTML=rows.map(function(x){ var p=x.p, r=x.r;
+      var val=p.value!=null?money(p.value):(p.raw&&p.raw!=='None'?'<span class="muted">'+esc(p.raw)+'</span> <span class="pill warn">check</span>':'<span class="muted">–</span>');
+      var hs=p.hs?(p.hs.length<4?esc(p.hs)+' <span class="pill warn">short</span>':esc(p.hs)):'<span class="pill warn">missing</span>';
+      return '<tr class="click" data-id="'+r.id+'"><td>'+esc(p.name)+'</td><td class="mono">'+hs+'</td><td class="num">'+val+'</td><td>'+esc(r.firm)+'</td><td>'+esc((r.a.sector||'').replace(/ \(.*$/,''))+'</td></tr>'; }).join('')
+      ||'<tr><td colspan="5" class="empty">No products listed for this selection.</td></tr>';
+  }
+  [].forEach.call(document.querySelectorAll('.pl'),function(b){ b.addEventListener('click',function(){
+    plist=b.getAttribute('data-l'); [].forEach.call(document.querySelectorAll('.pl'),function(x){ x.setAttribute('aria-pressed',x===b); }); drawProducts(); }); });
+  $('t-prod').addEventListener('click',function(e){ var tr=e.target.closest('tr[data-id]'); if(tr) openCase(tr.dataset.id); });
+
+  function drawSuggest(){
+    var real=R.filter(function(r){ var s=(r.suggest||'').trim(); return s && !/^(yes|no)$/i.test(s) && s.length>=5 && !/^(open record|hh+n+)/i.test(s); });
+    var blank=R.length-real.length;
+    $('sug-hint').textContent=real.length+' firms named something specific. '+blank+' left it blank, answered only "Yes", or typed a placeholder.';
+    $('sug').innerHTML=real.map(function(r){ return '<li class="'+(r.grp==='Domestic'?'d':'')+'"><p>'+esc(r.suggest)+'</p><small>'+esc(r.firm)+' · '+esc(r.product)+' · '+esc(r.grp)+'</small></li>'; }).join('')||'<li class="empty">None for this selection.</li>';
+  }
+
+  var fq='';
+  function drawFirms(){
+    var q=fq.toLowerCase();
+    var rows=R.filter(function(r){ return !q || (r.firm+' '+r.dist+' '+r.product+' '+(r.a.div||'')).toLowerCase().indexOf(q)>=0; })
+      .sort(function(a,b){ return b.start<a.start?-1:1; });
+    $('t-firms').tBodies[0].innerHTML=rows.map(function(r){ var iss=ISS_BY[r.id]||[], bad=iss.filter(function(i){return i.kind==='bad';}).length;
+      var pill=!iss.length?'<span class="pill ok">OK</span>':'<span class="pill '+(bad?'bad':'warn')+'">'+iss.length+'</span>';
+      return '<tr class="click" data-id="'+r.id+'"><td class="mono">'+fmtDay(r.date)+'</td><td>'+esc(r.firm)+'</td><td>'+esc(r.dist)+'</td><td>'+esc(cap(r.a.zone))+'</td><td><span class="pill '+(r.grp==='Domestic'?'d':'f')+'">'+esc(r.a.own||'')+'</span></td><td>'+esc(r.product)+'</td><td class="num">'+(r.mins==null?'–':r.mins)+'</td><td>'+pill+'</td></tr>'; }).join('')
+      ||'<tr><td colspan="8" class="empty">No firms match.</td></tr>';
+  }
+  $('fq').addEventListener('input',function(){ fq=this.value; drawFirms(); });
+  $('t-firms').addEventListener('click',function(e){ var tr=e.target.closest('tr[data-id]'); if(tr) openCase(tr.dataset.id); });
+
+  function drawEnum(){
+    var td=todayDhaka(), E={};
+    R.forEach(function(r){ var e=E[r.enum]=E[r.enum]||{n:0,t:0,m:[],f:0,last:''}; e.n++; if(r.date===td) e.t++; if(r.mins!=null) e.m.push(r.mins); if(ISS_BY[r.id]) e.f++; if(r.start>e.last) e.last=r.start; });
+    $('t-enum').tBodies[0].innerHTML=Object.keys(E).sort(function(a,b){return E[b].n-E[a].n;}).map(function(k){ var e=E[k];
+      return '<tr><td>'+esc(k)+'</td><td class="num">'+e.n+'</td><td class="num">'+(e.t||'')+'</td><td class="num">'+(e.m.length?median(e.m):'–')+'</td><td class="num">'+e.f+'</td><td class="mono">'+esc(e.last)+'</td></tr>'; }).join('')
+      ||'<tr><td colspan="6" class="empty">No interviews for this selection.</td></tr>';
+    $('t-ver').tBodies[0].innerHTML=D.versions.map(function(v){ return '<tr><td class="mono">'+esc(v.v)+'</td><td class="num">'+v.n+'</td><td class="mono">'+fmtDay(v.first)+'</td><td class="mono">'+fmtDay(v.last)+'</td></tr>'; }).join('');
+  }
+
+  var issType='all';
+  function drawIssues(){
+    var ids={}; R.forEach(function(r){ ids[r.id]=1; });
+    var list=D.issues.filter(function(i){ return !i.id || ids[i.id]; }), types={};
+    list.forEach(function(i){ types[i.type]=(types[i.type]||0)+1; });
+    if(issType!=='all' && !types[issType]) issType='all';
+    $('iss-chips').innerHTML='<button type="button" class="chip" data-t="all" aria-pressed="'+(issType==='all')+'">All <b>'+list.length+'</b></button>'+
+      Object.keys(types).sort(function(a,b){return types[b]-types[a];}).map(function(t){ return '<button type="button" class="chip" data-t="'+esc(t)+'" aria-pressed="'+(issType===t)+'">'+esc(t)+' <b>'+types[t]+'</b></button>'; }).join('');
+    var shown=list.filter(function(i){ return issType==='all'||i.type===issType; });
+    $('t-iss').tBodies[0].innerHTML=shown.map(function(i){ return '<tr'+(i.id?' class="click" data-id="'+i.id+'"':'')+'><td><span class="pill '+(i.kind==='bad'?'bad':'warn')+'">'+esc(i.type)+'</span> '+esc(i.issue)+'</td><td class="mono">'+esc(i.id||'–')+'</td><td>'+esc(i.firm)+'</td><td>'+esc(i.enum||'–')+'</td><td class="mono">'+(i.date?fmtDay(i.date):'–')+'</td></tr>'; }).join('')
+      ||'<tr><td colspan="5"><span class="pill ok">No problems found</span></td></tr>';
+    var flagged=R.filter(function(r){return ISS_BY[r.id];}).length;
+    $('k-flag').innerHTML=flagged+'<small>of '+R.length+'</small>';
+  }
+  $('iss-chips').addEventListener('click',function(e){ var b=e.target.closest('.chip'); if(!b) return; issType=b.dataset.t; drawIssues(); });
+  $('t-iss').addEventListener('click',function(e){ var tr=e.target.closest('tr[data-id]'); if(tr) openCase(tr.dataset.id); });
+
+  /* ---------- case view ---------- */
+  function openCase(id){
+    var r=BYID[id]; if(!r) return;
+    $('case-title').textContent=r.firm;
+    var h='<div class="casechips"><span><i>Record</i>'+esc(r.id)+'</span><span><i>Date</i>'+esc(r.start)+'</span><span><i>Minutes</i>'+(r.mins==null?'–':r.mins)+'</span><span><i>By</i>'+esc(r.enum)+'</span><span><i>District</i>'+esc(r.dist_raw)+'</span><span><i>Group</i>'+esc(r.grp)+'</span></div>';
+    var iss=ISS_BY[r.id]||[];
+    if(iss.length) h+='<h3>Data checks</h3><table>'+iss.map(function(i){ return '<tr><td><span class="pill '+(i.kind==='bad'?'bad':'warn')+'">'+esc(i.type)+'</span></td><td>'+esc(i.issue)+'</td></tr>'; }).join('')+'</table>';
+    var sec='';
+    h+='<h3>Main product</h3><table><tr><td>Main product or service</td><td>'+esc(r.product)+'</td></tr></table>';
+    D.schema.forEach(function(s){ var v=r.a[s.key];
+      if(s.section!==sec){ if(sec) h+='</table>'; sec=s.section; h+='<h3>'+esc(sec)+'</h3><table>'; }
+      var shown=v==null?'<span class="muted">–</span>':Array.isArray(v)?v.map(esc).join('<br>'):s.type==='num'?(s.unit==='Tk'?'Tk '+money(v):esc(v)):esc(cap(v));
+      h+='<tr><td>'+esc(s.label)+'</td><td>'+shown+'</td></tr>'; });
+    h+='</table>';
+    ['imports','exports'].forEach(function(k){ if(!r[k].length) return;
+      h+='<h3>'+(k==='imports'?'Top imported products':'Main export products')+'</h3><table>'+r[k].map(function(p){ return '<tr><td>'+esc(p.name)+' <span class="muted">HS '+esc(p.hs||'–')+'</span></td><td>'+(p.value!=null?'Tk '+money(p.value):esc(p.raw))+'</td></tr>'; }).join('')+'</table>'; });
+    h+='<h3>Open answer</h3><table><tr><td>Tariff line, SRO or procedure to examine</td><td>'+esc(r.suggest||'–')+'</td></tr><tr><td>GPS (lat, lon, precision m)</td><td class="mono">'+(r.gps?r.gps[1]+', '+r.gps[0]+', '+r.gps_prec:'–')+'</td></tr><tr><td>Form version</td><td class="mono">'+esc(r.version)+'</td></tr></table>';
+    $('case-body').innerHTML=h; $('case-body').scrollTop=0;
+    var dlg=$('case'); if(dlg.showModal) dlg.showModal(); else dlg.setAttribute('open','');
+  }
+  $('case-x').addEventListener('click',function(){ $('case').close(); });
+  $('case').addEventListener('click',function(e){ if(e.target===this) this.close(); });
+
+  /* ---------- descriptive statistics ---------- */
+  var statCharts=[], curVar='perm', curUnit='';
+  function stats(vals){
+    var n=vals.length, s=vals.slice().sort(function(a,b){return a-b;}); if(!n) return {n:0};
+    var mean=s.reduce(function(a,b){return a+b;},0)/n;
+    function q(p){ var i=(n-1)*p, lo=Math.floor(i), hi=Math.ceil(i); return s[lo]+(s[hi]-s[lo])*(i-lo); }
+    var sd=n>1?Math.sqrt(s.reduce(function(a,b){return a+(b-mean)*(b-mean);},0)/(n-1)):0;
+    var freq={}, mx=1; s.forEach(function(v){ freq[v]=(freq[v]||0)+1; if(freq[v]>mx) mx=freq[v]; });
+    var mode=mx>1?Object.keys(freq).filter(function(k){return freq[k]===mx;}).map(Number):[];
+    var q1=q(.25), q3=q(.75), iqr=q3-q1, lo=q1-1.5*iqr, hi=q3+1.5*iqr;
+    var inside=s.filter(function(v){return v>=lo&&v<=hi;});
+    var m2=0,m3=0,m4=0; s.forEach(function(v){ var d=v-mean; m2+=d*d; m3+=d*d*d; m4+=d*d*d*d; }); m2/=n; m3/=n; m4/=n;
+    var skew=m2?m3/Math.pow(m2,1.5):0, kurt=m2?m4/(m2*m2):3, jb=n/6*(skew*skew+(kurt-3)*(kurt-3)/4), p=Math.exp(-jb/2);
+    return {n:n,mean:mean,median:q(.5),mode:mode,sd:sd,min:s[0],max:s[n-1],q1:q1,q3:q3,wl:inside[0],wh:inside[inside.length-1],lo:lo,hi:hi,
+      skew:skew,p:p,normal:n<8?'Too few answers to judge':p>=0.05?'Close to normal':'Not normal',ext:[q1-3*iqr,q3+3*iqr]};
+  }
+  function nf(v){ if(v==null) return '–'; if(curUnit==='year') return String(Math.round(v)); var d=Math.abs(v)>=100?0:(Number.isInteger(v)?0:1); return Number(v).toLocaleString('en-IN',{maximumFractionDigits:d}); }
+  function tk(v){ return curUnit==='Tk'?'Tk '+short(v):nf(v); }
+  function short(v){ if(curUnit==='year') return String(Math.round(v)); var a=Math.abs(v); if(a>=1e7) return +(v/1e7).toFixed(1)+' cr'; if(a>=1e5) return +(v/1e5).toFixed(1)+' lakh'; if(a>=1e3) return +(v/1e3).toFixed(1)+'K'; return String(+(+v).toFixed(1)); }
+  var NUMS=D.schema.filter(function(s){return s.type==='num';});
+  (function(){ var g={}, order=[]; NUMS.forEach(function(s){ if(!g[s.section]){ g[s.section]=[]; order.push(s.section); } g[s.section].push(s); });
+    $('svar').innerHTML=order.map(function(k){ return '<optgroup label="'+esc(k)+'">'+g[k].map(function(s){ return '<option value="'+s.key+'">'+esc(s.label)+'</option>'; }).join('')+'</optgroup>'; }).join('');
+    $('svar').value=curVar; })();
+  function drawStat(){
+    statCharts.forEach(function(c){c.dispose();}); statCharts=[];
+    var sc=SCH[curVar]; curUnit=sc.unit;
+    var pts=R.filter(function(r){return r.a[curVar]!=null;}).map(function(r){return {v:r.a[curVar],r:r};});
+    var s=stats(pts.map(function(p){return p.v;}));
+    $('s-n').textContent=s.n;
+    if(!s.n){ ['s-mean','s-med','s-mode','s-sd','s-rng','s-pill','s-oc'].forEach(function(i){$(i).textContent='–';}); $('s-olist').innerHTML=''; $('t-grp').tBodies[0].innerHTML=''; return; }
+    $('s-mean').textContent=tk(s.mean); $('s-med').textContent=tk(s.median);
+    $('s-mode').textContent=s.mode.length?(s.mode.length>3?s.mode.length+' values tie':s.mode.map(tk).join(', ')):'No repeat';
+    $('s-sd').textContent=tk(s.sd); $('s-rng').textContent=short(s.min)+' – '+short(s.max);
+    $('s-pill').textContent=s.normal==='Too few answers to judge'?'Too few':s.normal;
+    $('s-pill').style.color=s.normal==='Close to normal'?'var(--ok)':s.normal==='Not normal'?'var(--bad)':'var(--warn)';
+    $('s-pill').title=s.n<8?'':'Jarque-Bera p = '+s.p.toFixed(3)+', skewness '+s.skew.toFixed(2);
+    var ol=pts.filter(function(p){return p.v<s.lo||p.v>s.hi;}).map(function(p){ return {v:p.v,r:p.r,x:p.v<s.ext[0]||p.v>s.ext[1]}; });
+    $('s-oc').textContent=ol.length;
+    var k=Math.max(4,Math.min(12,Math.ceil(Math.log2(s.n)+1))), w=(s.max-s.min)/k||1, counts=[], labs=[], nc=[];
+    if(curUnit==='year'||curUnit==='years'){ w=Math.max(1,Math.ceil(w)); k=Math.ceil((s.max-s.min+1)/w); }
+    for(var i=0;i<k;i++){ counts.push(0); var a=s.min+i*w, b=a+w; labs.push(short(a)+'–'+short(b)); var mid=(a+b)/2; nc.push(s.sd?s.n*w*Math.exp(-.5*Math.pow((mid-s.mean)/s.sd,2))/(s.sd*Math.sqrt(2*Math.PI)):0); }
+    pts.forEach(function(p){ var i=Math.min(k-1,Math.floor((p.v-s.min)/w)); counts[i]++; });
+    var ch=echarts.init($('c-hist')); statCharts.push(ch);
+    ch.setOption({tooltip:Object.assign({trigger:'axis',axisPointer:{type:'shadow'},valueFormatter:function(v){return (+v).toFixed(v%1?1:0);}},TT),grid:{left:8,right:12,top:16,bottom:8,containLabel:true},
+      xAxis:axis2D({type:'category',data:labs,splitLine:{show:false},axisLabel:{color:MUTED,fontSize:10,interval:0,rotate:labs.length>6?35:0}}),
+      yAxis:axis2D({type:'value',minInterval:1,name:'firms',nameTextStyle:{color:MUTED,fontSize:10}}),
+      series:[{name:'Firms',type:'bar',barCategoryGap:'6%',data:counts,itemStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'#FFC98F'},{offset:1,color:'#B9672C'}]),borderRadius:[3,3,0,0]}},
+              {name:'Normal curve',type:'line',smooth:true,symbol:'none',data:nc,lineStyle:{color:DOM,width:2.5,type:'dashed'},z:5}]});
+    var cb=echarts.init($('c-box')); statCharts.push(cb);
+    cb.setOption({tooltip:Object.assign({trigger:'item',formatter:function(p){
+        if(p.seriesName==='box') return 'Lowest (not outlier): '+tk(s.wl)+'<br>Q1: '+tk(s.q1)+'<br>Median: '+tk(s.median)+'<br>Q3: '+tk(s.q3)+'<br>Highest (not outlier): '+tk(s.wh);
+        if(p.seriesName==='mean') return 'Mean: '+tk(s.mean);
+        return 'Outlier: '+tk(p.value[0])+'<br>'+esc(ol[p.dataIndex].r.firm); }},TT),
+      grid:{left:12,right:18,top:14,bottom:10,containLabel:true},
+      yAxis:{type:'category',data:[''],axisLine:{show:false},axisTick:{show:false}},
+      xAxis:axis2D({type:'value',scale:true,axisLabel:{color:MUTED,formatter:short}}),
+      series:[{name:'box',type:'boxplot',data:[[s.wl,s.q1,s.median,s.q3,s.wh]],boxWidth:[28,44],itemStyle:{color:'rgba(242,166,90,.18)',borderColor:FOR,borderWidth:1.5}},
+              {name:'mean',type:'scatter',data:[[s.mean,0]],symbol:'diamond',symbolSize:12,itemStyle:{color:DOM},z:6},
+              {name:'outliers',type:'scatter',data:ol.map(function(o){return [o.v,0];}),symbolSize:function(v,p){return ol[p.dataIndex].x?11:8;},itemStyle:{color:'#F27A6E',borderColor:'#0B0E13',borderWidth:1},z:7}]});
+    cb.on('click',function(p){ if(p.seriesName==='outliers') openCase(ol[p.dataIndex].r.id); });
+    $('s-olist').innerHTML=ol.map(function(o){ return '<button type="button" class="'+(o.x?'x':'')+'" data-id="'+o.r.id+'" title="'+esc(o.r.firm)+'">'+esc(tk(o.v))+' · '+esc(o.r.firm.slice(0,22))+'</button>'; }).join('');
+    $('t-grp').tBodies[0].innerHTML=GROUPS.map(function(g){ var v=pts.filter(function(p){return p.r.grp===g;}).map(function(p){return p.v;}); if(!v.length) return '';
+      var m=v.reduce(function(a,b){return a+b;},0)/v.length;
+      return '<tr><td><span class="pill '+(g==='Domestic'?'d':'f')+'">'+g+'</span></td><td class="num">'+v.length+'</td><td class="num">'+tk(m)+'</td><td class="num">'+tk(median(v))+'</td></tr>'; }).join('')||'<tr><td colspan="4" class="empty">No answers.</td></tr>';
+  }
+  $('s-olist').addEventListener('click',function(e){ var b=e.target.closest('button[data-id]'); if(b) openCase(b.dataset.id); });
+  $('svar').addEventListener('change',function(){ curVar=this.value; drawStat(); });
+
+  /* ---------- answers by question ---------- */
+  var ansChart=null, curQ='mech';
+  var CATS=D.schema.filter(function(s){return s.type!=='num';}).concat([SCH.size]);
+  (function(){ var g={}, order=[]; CATS.forEach(function(s){ if(!g[s.section]){ g[s.section]=[]; order.push(s.section); } g[s.section].push(s); });
+    order.sort();
+    $('qvar').innerHTML=order.map(function(k){ return '<optgroup label="'+esc(k)+'">'+g[k].map(function(s){ var l=s.label; if(l.length>78) l=l.slice(0,76)+'…'; return '<option value="'+s.key+'">'+esc(l)+'</option>'; }).join('')+'</optgroup>'; }).join('');
+    $('qvar').value=curQ; })();
+  function drawAnswer(){
+    if(ansChart){ ansChart.dispose(); ansChart=null; }
+    var t=tally(curQ,R), q=SCH[curQ];
+    $('q-text').textContent=(q.section||'')+'. '+q.label;
+    $('q-n').textContent=t.n.all; $('q-type').textContent=q.type==='multi'?'Multiple answers':q.type==='sev'?'Severity scale':'One answer';
+    var top=null; t.opts.forEach(function(o){ if(t.c[o].all>0 && (!top||t.c[o].all>t.c[top].all)) top=o; });
+    $('q-top').textContent=top?(cap(top).length>40?cap(top).slice(0,38)+'…':cap(top))+' ('+pct(t.c[top].all,t.n.all)+'%)':'–';
+    var el=$('c-ans'); el.style.height=Math.max(180,t.opts.length*44+40)+'px';
+    ansChart=echarts.init(el);
+    if(!t.n.all){ emptyChart(ansChart); return; }
+    var rev=t.opts.slice().reverse(), narrow=el.clientWidth<560;
+    ansChart.setOption({tooltip:Object.assign({trigger:'axis',axisPointer:{type:'shadow'},formatter:function(ps){ var o=rev[ps[0].dataIndex], x=t.c[o];
+        return '<b>'+esc(cap(o))+'</b><br>All: '+x.all+' ('+pct(x.all,t.n.all)+'% of '+t.n.all+')<br><span style="color:'+FOR+'">Foreign or JV: '+x['Foreign or JV']+' ('+pct(x['Foreign or JV'],t.n['Foreign or JV'])+'%)</span><br><span style="color:'+DOM+'">Domestic: '+x['Domestic']+' ('+pct(x['Domestic'],t.n['Domestic'])+'%)</span>'; }},TT),
+      grid:{left:8,right:76,top:8,bottom:8,containLabel:true},
+      yAxis:axis2D({type:'category',data:rev.map(function(o){return wrapLabel(cap(o),narrow?22:40);}),splitLine:{show:false},axisLabel:{color:INK,fontSize:12,lineHeight:15}}),
+      xAxis:axis2D({type:'value',minInterval:1}),
+      series:GROUPS.map(function(g,i){ return {name:g,type:'bar',stack:'g',barMaxWidth:22,itemStyle:{color:GCOL[g],borderRadius:i?[0,3,3,0]:0},data:rev.map(function(o){return t.c[o][g];}),
+        label:i?{show:true,position:'right',color:MUTED,fontSize:12,formatter:function(p){ var x=t.c[rev[p.dataIndex]]; return x.all+'  ('+pct(x.all,t.n.all)+'%)'; }}:{show:false}}; })});
+  }
+  $('qvar').addEventListener('change',function(){ curQ=this.value; drawAnswer(); });
+
+  /* ---------- draw everything ---------- */
+  function draw(){
+    charts.forEach(function(c){c.dispose();}); charts=[];
+    var td=todayDhaka(), d7=addDays(td,-6);
+    $('k-int').textContent=R.length;
+    $('k-today').textContent=R.filter(function(r){return r.date===td;}).length;
+    $('k-7').textContent=R.filter(function(r){return r.date>=d7;}).length;
+    $('k-for').textContent=R.filter(function(r){return r.grp!=='Domestic';}).length;
+    $('k-dom').textContent=R.filter(function(r){return r.grp==='Domestic';}).length;
+    var zin=R.filter(function(r){return r.inzone;}).length; $('k-zone').innerHTML=zin+'<small>of '+R.length+'</small>';
+    var ia=R.filter(function(r){return r.a.imp;}), iy=ia.filter(function(r){return r.a.imp==='yes';}).length;
+    $('k-imp').innerHTML=(ia.length?pct(iy,ia.length):0)+'<small>%</small>';
+    var mm=median(R.map(function(r){return r.mins;}).filter(function(v){return v!=null;})); $('k-min').innerHTML=(mm==null?'–':Math.round(mm))+'<small>min</small>';
+    drawMap(); drawTrend(); drawTime();
+    groupChart('c-zone','zone',{labels:{'outside zones':'Outside zones'}});
+    groupChart('c-own','own');
+    groupChart('c-sector','sector',{labels:{'Manufacturing (incl. agro-processing and pharmaceuticals)':'Manufacturing','Services (incl. ICT and logistics)':'Services','Agriculture, fisheries and livestock':'Agriculture'}});
+    groupChart('c-size','size');
+    groupChart('c-turn','turnover');
+    groupChart('c-exp','exp_dir');
+    groupChart('c-port','port');
+    groupChart('c-scheme','scheme',{allow3D:false});
+    sevGrid('c1','c-c1','t-c1'); sevGrid('e1','c-e1','t-e1');
+    multiChart('c-f1','f1'); multiChart('c-g1','g1');
+    groupChart('c-conf','confidence',{allow3D:false,rowH:34,minH:200,wrap:18});
+    groupChart('c-cons','consult',{allow3D:false,rowH:34,minH:200,wrap:18});
+    groupChart('c-over','overall',{allow3D:false,rowH:34,minH:200,wrap:18});
+    drawProducts(); drawStat(); drawAnswer(); drawSuggest(); drawFirms(); drawEnum(); drawIssues();
+  }
+
+  function setMode(is3d){ mode3D=is3d&&has3D; $('b3d').setAttribute('aria-pressed',mode3D); $('b2d').setAttribute('aria-pressed',!mode3D);
+    try{ localStorage.setItem('investor-mode',mode3D?'3d':'2d'); }catch(e){} draw(); }
+  $('b3d').addEventListener('click',function(){ setMode(true); });
+  $('b2d').addEventListener('click',function(){ setMode(false); });
+  try{ var saved=localStorage.getItem('investor-mode'); if(saved) mode3D=(saved==='3d')&&has3D; }catch(e){}
+  if(!has3D){ $('b3d').disabled=true; $('b3d').title='3D needs WebGL, which this browser has turned off'; }
+  $('b3d').setAttribute('aria-pressed',mode3D); $('b2d').setAttribute('aria-pressed',!mode3D);
+
+  $('exported').textContent=D.exported; $('updated').textContent=D.updated;
+  $('foot').textContent='Source: Kobo export "Investor Survey Questionnaire, all versions", '+D.exported+' (Dhaka time). '+ALL.length+' submissions. Bangla answer text removed for chart labels. Map boundaries: geoBoundaries (CC BY 4.0).';
+  var rt; window.addEventListener('resize',function(){ clearTimeout(rt); rt=setTimeout(function(){ charts.concat(statCharts).forEach(function(c){c.resize();}); if(ansChart) ansChart.resize(); },150); });
+  applyFilter();
+}
+</script>
+
+</body></html>
