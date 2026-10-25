@@ -3,13 +3,34 @@ import json, re, sys, datetime as dt
 from collections import Counter
 import openpyxl
 
-NOW = dt.datetime.utcnow() + dt.timedelta(hours=6)  # Dhaka time
+NOW = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None) + dt.timedelta(hours=6)  # Dhaka time
 
 SRC, GEO, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
 wb = openpyxl.load_workbook(SRC)
 ws = wb.worksheets[0]
 rows = list(ws.iter_rows(values_only=True))
 H, R = rows[0], [r for r in rows[1:] if any(v not in (None, '') for v in r)]
+
+# The script reads answers by column position, so stop with a clear message if the export layout moved.
+EXPECT = {0: 'start', 1: 'end', 4: 'Firm name', 5: 'Location (division)', 8: 'Zone status',
+          11: 'Investment type by ownership', 21: 'Did the firm import', 61: 'Tariff on imported raw materials',
+          83: 'Land and site access', 90: 'Total investment by the firm', 110: 'Overall tariff and customs environment',
+          113: '_Record your current location_latitude', 131: '_id', 133: '_submission_time', 136: '_submitted_by',
+          137: '__version__', 139: '_index'}
+bad = [(i, t, H[i] if i < len(H) else None) for i, t in EXPECT.items() if i >= len(H) or t.lower() not in str(H[i]).lower()]
+if bad:
+    sys.exit('Export columns have moved, so build.py needs updating. Column number, expected, found:\n' +
+             '\n'.join('  %d: %r -> %r' % b for b in bad))
+
+def when(v):
+    """Kobo gives a datetime in a downloaded file but text like 2026-10-19T10:44:34.535+06:00 from the API."""
+    if v in (None, ''): return None
+    if isinstance(v, dt.datetime): x = v
+    else:
+        x = dt.datetime.fromisoformat(str(v).strip().replace('Z', '+00:00').replace(' ', 'T', 1))
+    if x.tzinfo is not None:
+        x = x.astimezone(dt.timezone(dt.timedelta(hours=6))).replace(tzinfo=None)
+    return x
 
 OWN_FIX = {'Foreign / MNC ( / (MNC))': 'Foreign / MNC', 'MNC ( )': 'MNC'}
 BN = re.compile(r'[ঀ-৿]+')
@@ -158,8 +179,8 @@ def issue(rec, text, kind='bad', typ=''):
     issues.append(dict(id=rec['id'], firm=rec['firm'], issue=text, kind=kind, type=typ, enum=rec['enum'], date=rec['date']))
 
 for r in R:
-    start, end = r[0], r[1]
-    rec = dict(id=str(r[131]), idx=int(r[139]) if r[139] else None,
+    start, end = when(r[0]), when(r[1])
+    rec = dict(id=str(r[131]), idx=int(float(r[139])) if r[139] not in (None, '') else None,
                firm=re.sub(r'\s+', ' ', str(r[4] or '')).strip(),
                date=start.strftime('%Y-%m-%d') if start else None,
                start=start.strftime('%Y-%m-%d %H:%M') if start else None,
