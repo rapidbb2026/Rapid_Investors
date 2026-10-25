@@ -24,7 +24,8 @@ jobs:
       - name: Download Kobo export
         env:
           KOBO_TOKEN: ${{ secrets.KOBO_TOKEN }}
-          KOBO_EXPORT_URL: ${{ secrets.KOBO_EXPORT_URL }}
+          KOBO_SERVER: https://eu.kobotoolbox.org
+          KOBO_ASSET_UID: aHJpsu8ZQtVthnPVppzGnJ
         run: python scripts/fetch_kobo.py export.xlsx
       - name: Build data file
         run: python scripts/build.py export.xlsx scripts/bd_div.json data/data.json
