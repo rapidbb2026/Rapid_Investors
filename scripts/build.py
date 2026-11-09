@@ -3,6 +3,7 @@ import json, re, sys, datetime as dt
 from collections import Counter
 import openpyxl
 
+BN = re.compile(r'[\u0980-\u09FF]+')
 NOW = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None) + dt.timedelta(hours=6)  # Dhaka time
 
 SRC, GEO, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -19,15 +20,30 @@ ORIG_HEADERS = ["start", "end", "username", "Do you agree to take part in this s
 def _norm(x):
     return re.sub(r'\s+', ' ', str(x or '')).strip()
 
+def _loose(x):
+    """Header without Bangla, option numbers or punctuation, for headers whose wording was edited slightly."""
+    x = BN.sub(' ', _norm(x)).lower()
+    x = re.sub(r'/\s*\d+\s*(=\s*)?', '/', x)
+    return re.sub(r'[^a-z0-9/]+', '', x)
+
 def _remap(header, rows):
-    where = {}
-    for j, t in enumerate(header):
-        where.setdefault(_norm(t), []).append(j)
-    seen, idx = {}, []
-    for t in ORIG_HEADERS:
-        k = seen.get(t, 0); seen[t] = k + 1
-        hits = where.get(t, [])
-        idx.append(hits[k] if k < len(hits) else None)
+    def build(key):
+        where = {}
+        for j, t in enumerate(header):
+            where.setdefault(key(t), []).append(j)
+        seen, out = {}, []
+        for t in ORIG_HEADERS:
+            kt = key(t); k = seen.get(kt, 0); seen[kt] = k + 1
+            hits = where.get(kt, [])
+            out.append(hits[k] if k < len(hits) else None)
+        return out
+    idx, loose = build(_norm), build(_loose)
+    idx = [a if a is not None else b for a, b in zip(idx, loose)]
+    # last resort: a column sitting between two found neighbours that are one column apart
+    for i in range(1, len(idx) - 1):
+        if idx[i] is None and idx[i - 1] is not None and idx[i + 1] is not None and idx[i + 1] - idx[i - 1] == 2:
+            idx[i] = idx[i - 1] + 1
+            print('Matched by position (heading wording changed): %s -> %s' % (ORIG_HEADERS[i][-70:], _norm(header[idx[i]])[-70:]))
     return idx
 
 IDX = _remap(H, R)
