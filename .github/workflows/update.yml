@@ -29,9 +29,17 @@ jobs:
         run: python scripts/fetch_kobo.py export.xlsx
       - name: Build data file
         run: python scripts/build.py export.xlsx scripts/bd_div.json data/data.json
-      - name: Commit if changed
+      - name: Commit when the survey data changed
         run: |
-          git config user.name "dashboard-bot"
-          git config user.email "dashboard-bot@users.noreply.github.com"
-          git add data/data.json
-          git diff --cached --quiet || (git commit -m "Update data" && git push)
+          # Compare with the last saved data, ignoring the time stamp, so the repo only grows when there is new data.
+          old=$(git show HEAD:data/data.json 2>/dev/null | jq -S 'del(.exported)' || echo none)
+          new=$(jq -S 'del(.exported)' data/data.json)
+          if [ "$old" != "$new" ] || [ ! -f data/latest.xlsx ]; then
+            cp export.xlsx data/latest.xlsx          # backup the site offers as "Download latest .xlsx"
+            git config user.name "dashboard-bot"
+            git config user.email "dashboard-bot@users.noreply.github.com"
+            git add data/data.json data/latest.xlsx
+            git commit -m "Update data" && git push
+          else
+            echo "No new submissions, nothing to commit."
+          fi
