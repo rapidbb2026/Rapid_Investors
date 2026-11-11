@@ -1,0 +1,4 @@
+export.xlsx
+*.xlsx
+!data/latest.xlsx
+__pycache__/
