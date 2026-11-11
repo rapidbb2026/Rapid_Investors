@@ -47,9 +47,9 @@ def _remap(header, rows):
     return idx
 
 IDX = _remap(H, R)
-USED = sorted(set([0, 1, 4, 6, 7, 12, 14, 111, 113, 114, 116, 131, 133, 136, 137, 139]
-                  + list(range(5, 24)) + [29, 30, 31, 33, 34, 35, 37, 38, 39] + list(range(40, 45)) + [46]
-                  + [52, 53, 54, 56, 57, 58, 59] + list(range(61, 91)) + list(range(92, 98)) + list(range(99, 112))))
+USED = sorted(set([0, 1, 3, 4, 6, 7, 12, 14, 113, 114, 116, 131, 133, 136, 137, 139]
+                  + list(range(5, 24)) + [29, 30, 33, 34, 37, 38] + list(range(40, 47))
+                  + [52, 54, 56, 58, 59] + list(range(61, 91)) + list(range(92, 98)) + list(range(99, 111))))
 missing = [i for i in USED if IDX[i] is None]
 if missing:
     sys.exit('These questions are missing from the Kobo export, so build.py needs updating:\n' +
@@ -91,15 +91,21 @@ def num(v):
     except ValueError: return None
 
 def money(v):
-    """Tk value from free text. Returns (value or None, problem or None)."""
-    if v in (None, ''): return None, None
+    """Amount from free text. Returns (value or None, 'BDT' or 'USD', problem or None).
+    Handles '25 crore bdt', '1.5 lakh', '500000', 'Us 163.39k', '$2m'."""
+    if v in (None, ''): return None, 'BDT', None
     s = str(v).strip().lower().replace(',', '')
-    if re.search(r'us|\$', s): return None, 'Value given in US dollars'
-    m = re.match(r'^([\d.]+)\s*(crore|cr|lakh|lac)?\s*(bdt|tk|taka)?$', s)
-    if not m: return None, 'Value is not a number'
-    x = float(m.group(1)) * {'crore': 1e7, 'cr': 1e7, 'lakh': 1e5, 'lac': 1e5, None: 1}[m.group(2)]
-    if x == 0: return None, 'Value is zero'
-    return x, None
+    cur = 'USD' if re.search(r'(^|[^a-z])(us|usd)([^a-z]|$)|\$|dollar', s) else 'BDT'
+    s = re.sub(r'usd|us|\$|dollars?|bdt|tk|taka', ' ', s).strip(' -:=')
+    if re.fullmatch(r'\d+\.\d{3}', s): return None, cur, 'Value is unclear (the dot could be a decimal point or a thousands separator)'
+    m = re.match(r'^([\d.]+)\s*(k|thousand|m|mn|million|crore|core|cr|lakh|lac)?\.?$', s)
+    if not m: return None, cur, 'Value is not a number'
+    try: x = float(m.group(1))
+    except ValueError: return None, cur, 'Value is not a number'
+    x *= {'k': 1e3, 'thousand': 1e3, 'm': 1e6, 'mn': 1e6, 'million': 1e6, 'crore': 1e7, 'core': 1e7,
+          'cr': 1e7, 'lakh': 1e5, 'lac': 1e5, None: 1}[m.group(2)]
+    if x == 0: return None, cur, 'Value is zero'
+    return x, cur, None
 
 # ---------- question schema ----------
 SEV = ['none', 'minor', 'moderate', 'serious', 'very serious']
@@ -107,72 +113,104 @@ Q = []  # each: key, col, section, label, type, suffix
 def add(key, col, sec, label, typ='single', **kw):
     Q.append(dict(key=key, col=col, section=sec, label=label, type=typ, **kw))
 
-A, B, C, E, F, G = ('A. Firm profile', 'B. Trade and imports', 'C. Tariff and customs',
-                    'E. Investment climate', 'F. Effects on investment', 'G. Reform priorities and outlook')
-add('div', 5, A, 'Location (division)')
-add('zone', 8, A, 'Zone status')
-add('pos', 9, A, 'Respondent position')
-add('recontact', 10, A, 'Agreed to be re-contacted')
-add('own', 11, A, 'Investment type by ownership')
-add('sector', 13, A, 'Main sector')
-add('year', 7, A, 'Year operations began in Bangladesh', 'num', unit='year')
-add('perm', 15, A, 'Permanent workers at present', 'num', unit='workers')
-add('temp', 16, A, 'Temporary workers at present', 'num', unit='workers')
-add('exp_dir', 17, A, 'Share of sales exported directly (last FY)', ordinal=True)
-add('exp_ind', 18, A, 'Share of sales as deemed or indirect exports', ordinal=True)
-add('assets', 19, A, 'Value of fixed assets, excluding land and building', ordinal=True)
-add('turnover', 20, A, 'Annual turnover, FY2025-26', ordinal=True)
-add('imp', 21, B, 'Imported goods or equipment in the last 12 months')
-add('port', 22, B, 'Main port or station of entry for imports')
-add('imp_share', 23, B, 'Share of input and equipment spending that is imported', ordinal=True, suffix='%')
-add('scheme', 40, B, 'Use of bonded warehouse, drawback, exemption or zone schemes')
-add('duty_cost', 41, B, 'Import duties and taxes as a share of production cost', ordinal=True)
-add('imp_value', 42, B, 'Annual value of imports, last FY', ordinal=True)
-add('consign', 43, B, 'Import consignments (bills of entry), last 12 months', ordinal=True)
+S, A, B, C, D, E, F, G, HH = ('Screener', 'A. Firm and respondent profile', 'B. Trade and tariff exposure',
+    'C. Tariff and customs bottlenecks', 'D. Bonded warehouse, drawback and facilitation',
+    'E. Wider investment-climate constraints', 'F. Business and investment impacts', 'G. Reform priorities',
+    'H. Predictability and institutional experience')
+YN = ['yes', 'no']
+# Screener
+add('div', 5, S, 'Location (division)',
+    order=['Barishal', 'Chattogram', 'Dhaka', 'Khulna', 'Mymensingh', 'Rajshahi', 'Rangpur', 'Sylhet'])
+add('year', 7, S, 'Year operations began in Bangladesh', 'num', unit='year')
+add('zone', 8, S, 'Zone status', order=['EPZ (BEPZA)', 'Economic Zone (BEZA)', 'Hi-Tech Park (BHTPA)', 'outside zones'])
+add('pos', 9, S, 'Respondent position',
+    order=['Owner / director', 'CEO / GM', 'Finance / tax', 'Customs / trade', 'Supply chain', 'Strategy', 'Other'])
+add('recontact', 10, S, 'May we re-contact you for clarification or quality assurance?', order=YN)
+# Module A
+add('own', 11, A, 'Investment type by ownership',
+    order=['Domestic private', 'Foreign', 'MNC', 'Foreign / MNC', 'Joint venture', 'State-owned', 'Other'])
+add('own_share', 12, A, 'Approximate foreign ownership share', ordinal=True)
+add('sector', 13, A, 'Main sector (top level, one answer)',
+    order=['Manufacturing (incl. agro-processing and pharmaceuticals)', 'Agriculture, fisheries and livestock',
+           'Services (incl. ICT and logistics)'])
+add('perm', 15, A, 'Number of permanent workers at present', 'num', unit='workers')
+add('temp', 16, A, 'Number of temporary workers at present', 'num', unit='workers')
+add('assets', 19, A, 'Value of fixed assets, excluding land and factory building', ordinal=True)
+add('turnover', 20, A, 'Annual turnover, last completed fiscal year (FY2025-26)', ordinal=True)
+add('trade_app', 59, A, 'In the last three years, has the firm traded goods, or applied for any customs, tariff or investment approval?', order=YN)
+add('exp_dir', 17, A, 'Share of sales exported directly (last completed fiscal year)', ordinal=True)
+add('exp_ind', 18, A, 'Share of sales as deemed / indirect exports', ordinal=True)
+add('scheme', 40, A, 'Use of bonded warehouse, drawback, exemption or zone schemes',
+    order=['uses', 'eligible but does not use', 'not eligible', 'unaware'])
+# Module B
+add('imp', 21, B, 'Did the firm import goods, raw materials, intermediates or equipment in the last 12 months?', order=YN)
+add('port', 22, B, "Main port or station of entry for the firm's imports",
+    order=['Chattogram port', 'Dhaka ICD (Kamalapur / Pangaon)', 'Dhaka airport (HSIA)', 'Benapole', 'Mongla', 'Other'])
+add('imp_share', 23, B, 'Share of input and equipment expenditure that is imported (FY2025-26)', ordinal=True, suffix='%')
+add('duty_cost', 41, B, "Share of the firm's total production cost made up of duties and taxes paid at import", ordinal=True)
+add('imp_value', 42, B, 'Annual value of imports, last completed fiscal year', ordinal=True)
+add('consign', 43, B, 'Number of import consignments (bills of entry) in the last 12 months', ordinal=True)
 add('burden', 44, B, 'Border-tax burden compared with three years ago',
     order=['Much lower', 'Lower', 'Same', 'Higher', 'Much higher'])
-add('duty_paid', 46, B, 'Total duties and taxes paid at import, last FY', ordinal=True)
-add('trade_app', 59, B, 'Traded or applied for a customs, tariff or investment process in the last 3 years')
-C1 = [(61, 'Tariff on imported raw materials'), (62, 'Tariff on intermediate inputs'),
-      (63, 'Tariff on capital machinery'), (64, 'Input duty as high as duty on competing finished goods'),
+add('burden_change', 45, B, 'If higher or lower: what was the main change?',
+    order=['New or higher RD / SD', 'Change in CD rate', 'Higher assessed (tariff) value', 'Exchange rate',
+           'Loss of exemption or concession', 'Change in products imported', 'Other'])
+add('duty_paid', 46, B, 'Total duties and taxes paid at import, last completed fiscal year', ordinal=True)
+# Module C
+C1 = [(61, 'Tariff on imported raw materials'),
+      (62, 'Tariff on imported intermediate inputs (parts, components, fabrics, chemicals)'),
+      (63, 'Tariff on capital machinery and equipment'),
+      (64, 'Duty on imported inputs as high as, or higher than, duty on competing finished goods'),
       (65, 'Supplementary Duty (SD) burden'), (66, 'Regulatory Duty (RD) burden'),
-      (67, 'Delay adjusting VAT, AT and AIT paid at import'), (68, 'HS classification uncertainty or dispute'),
-      (69, 'Customs clearance delay'), (70, 'Frequent SRO or policy changes'),
-      (71, 'Complex bonded, drawback or exemption procedures'), (72, 'Minimum import or tariff value above price paid')]
+      (67, 'Delay or difficulty adjusting VAT, AT and AIT paid at import'),
+      (68, 'HS classification uncertainty or dispute'), (69, 'Customs clearance delay'),
+      (70, 'Frequent SRO / policy changes, or inadequate notice'),
+      (71, 'Complex bonded, drawback or exemption procedures'),
+      (72, 'Minimum import value or tariff value set above the price actually paid')]
 for i, (c, l) in enumerate(C1):
     add('c1_%d' % (i + 1), c, C, l, 'sev', order=SEV, grid='c1')
-add('mech', 73, C, 'Main way the largest problem affects the firm')
-add('clear_time', 74, C, 'Routine customs clearance time at the main port', ordinal=True, suffix=' days')
-add('disputes', 75, C, 'HS classification or valuation disputes, last 12 months (number)', ordinal=True)
-add('info', 76, C, 'Ease of getting reliable advance information on tariffs')
-add('bonded_eff', 77, C, 'Effectiveness of bonded access',
-    order=['very ineffective', 'ineffective', 'neutral', 'effective', 'Very effective', 'not applicable (N/A)'])
-add('drawback_time', 78, C, 'Typical duty drawback or refund time', ordinal=True, suffix=' months')
-add('obstacle', 79, C, 'Main obstacle to using duty-free import schemes')
-add('unrefunded', 80, C, 'Duty or tax paid but not yet refunded', ordinal=True)
-add('guarantee', 81, C, 'Amount held as bank guarantee or bond with customs', ordinal=True)
+add('mech', 73, C, 'Main mechanism through which the largest problem affects the firm',
+    order=['Input cost', 'Cash flow', 'Delay', 'Uncertainty', 'Compliance cost', 'Lost order', 'Investment delay', 'Other'])
+add('clear_time', 74, C, 'Typical routine customs clearance time at the main port of entry', ordinal=True, suffix=' days')
+add('disputes', 75, C, 'Number of HS classification or valuation disputes in the last 12 months', ordinal=True)
+add('info', 76, C, 'Ease of obtaining reliable advance information on tariffs and procedures',
+    order=['Very easy', 'Easy', 'Difficult', 'Very difficult'])
+# Module D
+add('bonded_eff', 77, D, 'Effectiveness of bonded access',
+    order=['Very effective', 'effective', 'neutral', 'ineffective', 'very ineffective', 'not applicable (N/A)'])
+add('drawback_time', 78, D, 'Typical duty drawback or refund time', ordinal=True, suffix=' months')
+add('obstacle', 79, D, 'Main obstacle to using these schemes',
+    order=['Eligibility', 'Documentation', 'Delay', 'Uncertainty', 'Audit risk', 'Lack of information', 'Agent cost', 'Other'])
+add('unrefunded', 80, D, 'Duty or tax paid but not yet refunded (drawback or VAT) at present', ordinal=True)
+add('guarantee', 81, D, 'Amount held as bank guarantee or bond security with customs at present', ordinal=True)
+# Module E
 E1 = [(83, 'Land and site access'), (84, 'Power reliability and cost'), (85, 'Transport, logistics and ports'),
       (86, 'Finance, trade finance and foreign exchange'), (87, 'Regulatory approvals and licences'),
       (88, 'Coordination between government agencies'), (89, 'Shortage of skilled labour')]
 for i, (c, l) in enumerate(E1):
     add('e1_%d' % (i + 1), c, E, l, 'sev', order=SEV, grid='e1')
-add('invest3', 90, F, 'Total investment FY2023-24 to FY2025-26, excluding land', ordinal=True)
-F1 = [(92, 'Delayed an investment'), (93, 'Deferred an investment'), (94, 'Reduced the scale of a planned investment'),
-      (95, 'Cancelled an investment'), (96, 'Used a less-preferred sourcing option'), (97, 'Lost export orders or competitiveness')]
-add('f1', None, F, 'Effects of tariff or customs issues in the last 3 years', 'multi',
-    cols=F1, none_label='None of these')
-G1 = [(99, 'Cut tariffs on selected inputs'), (100, 'Simplify tariff bands, reduce escalation'),
-      (101, 'Better HS guidance and advance rulings'), (102, 'Valuation transparency and dispute resolution'),
-      (103, 'Faster clearance through digital reform'), (104, 'Simpler bonded, drawback and refund procedures'),
-      (105, 'Advance notice and consultation on SRO changes'), (106, 'NBR, MoC, BTTC and IB coordination'),
-      (107, 'Adjustment support for own sector')]
-add('g1', None, G, 'Three most urgent reforms', 'multi', cols=G1, none_label='None selected')
-add('confidence', 108, G, 'Confidence that tariff and customs rules stay the same over two years',
-    order=['not at all confident', 'less confident', 'moderately confident', 'confident', 'very confident', 'DK'])
-add('consult', 109, G, 'Effectiveness of government and business consultation on tariff changes',
-    order=['very ineffective', 'ineffective', 'moderately effective', 'effective', 'very effective', 'no experience'])
-add('overall', 110, G, 'Overall tariff and customs environment for investment',
-    order=['Very constraining', 'Constraining', 'neutral', 'Supportive', 'Very supportive'])
+# Module F
+add('invest3', 90, F, 'Total investment in the last three fiscal years (FY2023-24 to FY2025-26), excluding land', ordinal=True)
+F1 = [(92, 'Delay an investment'), (93, 'Defer an investment'), (94, 'Reduce the scale of a planned investment'),
+      (95, 'Cancel an investment'), (96, 'Use a less-preferred sourcing option'), (97, 'Lose export orders or competitiveness')]
+add('f1', None, F, 'In the last three years, have tariff or customs issues caused the firm to do any of the following?',
+    'multi', cols=F1, none_label='None selected')
+# Module G
+G1 = [(99, 'Reduce or rationalise tariffs on selected inputs'), (100, 'Simplify tariff bands and reduce escalation'),
+      (101, 'Improve HS guidance and advance rulings'), (102, 'Improve valuation transparency and dispute resolution'),
+      (103, 'Reduce clearance time through process and digital reform'),
+      (104, 'Simplify bonded, drawback and refund procedures'),
+      (105, 'Improve advance notice and consultation on SRO changes'), (106, 'Improve NBR–MoC–BTTC–IB coordination'),
+      (107, "Strengthen adjustment support for the respondent's own sector")]
+add('g1', None, G, 'Which THREE of the following reforms are most urgent for the firm?', 'multi', cols=G1,
+    none_label='None selected')
+# Module H
+add('confidence', 108, HH, 'Confidence that tariff and customs rules will remain the same over the next two years',
+    order=['Very confident', 'confident', 'moderately confident', 'less confident', 'not at all confident', 'DK'])
+add('consult', 109, HH, 'Effectiveness of government–business consultation on tariff changes',
+    order=['very effective', 'effective', 'moderately effective', 'ineffective', 'very ineffective', 'no experience'])
+add('overall', 110, HH, 'Overall tariff and customs environment for investment',
+    order=['very supportive', 'supportive', 'neutral', 'Constraining', 'Very constraining'])
 
 LAST = re.compile(r"^(dk|don't know|dk / refused|varies|not applicable \(n/a\)|no experience)$", re.I)
 def code_of(raw):
@@ -185,6 +223,8 @@ def label_for(q, raw):
     if q['type'] == 'sev': s = s.lower()
     suf = q.get('suffix')
     if suf and re.search(r'\d$', s) and not LAST.match(s): s = s + suf
+    for o in q.get('order') or []:
+        if o.lower() == s.lower(): return o
     return s
 
 # ---------- geography ----------
@@ -213,7 +253,11 @@ name_seen = {}
 def issue(rec, text, kind='bad', typ=''):
     issues.append(dict(id=rec['id'], firm=rec['firm'], issue=text, kind=kind, type=typ, enum=rec['enum'], date=rec['date']))
 
+not_consented = 0
 for r in R:
+    if str(r[3] or '').strip().lower() == 'no':
+        not_consented += 1
+        continue
     start, end = when(r[0]), when(r[1])
     rec = dict(id=str(r[131]), idx=int(float(r[139])) if r[139] not in (None, '') else None,
                firm=re.sub(r'\s+', ' ', str(r[4] or '')).strip(),
@@ -243,32 +287,20 @@ for r in R:
     rec['dist'] = d; rec['dist_raw'] = d_raw
     # group
     own = rec['a']['own'] or ''
-    rec['grp'] = 'Domestic' if re.match(r'domestic|state', own, re.I) else 'Foreign or JV'
+    rec['grp'] = 'Foreign or JV' if re.search(r'foreign|mnc|joint', own, re.I) else 'Domestic'
     rec['inzone'] = (rec['a']['zone'] or '').lower() != 'outside zones'
     rec['a']['age'] = (NOW.year - rec['a']['year']) if rec['a']['year'] else None
     rec['a']['workers'] = (rec['a']['perm'] or 0) + (rec['a']['temp'] or 0) if rec['a']['perm'] is not None else None
-    # products
-    imps = []
-    for pc, vc, hc in [(29, 30, 31), (33, 34, 35), (37, 38, 39)]:
-        if r[pc] in (None, ''): continue
-        v, prob = money(r[vc])
-        hs = re.sub(r'\D', '', str(r[hc] or ''))
-        imps.append(dict(name=clean(r[pc]), value=v, raw=str(r[vc]).strip() if r[vc] is not None else '', hs=hs))
-        if prob: issue(rec, 'Import value for "%s": %s (%s)' % (clean(r[pc]), prob.lower(), str(r[vc]).strip()), 'warn', 'Product value format')
-        if hs and len(hs) < 4: issue(rec, 'HS code %s for "%s" is shorter than 4 digits' % (hs, clean(r[pc])), 'warn', 'HS code')
-        if not hs: issue(rec, 'No HS code for imported "%s"' % clean(r[pc]), 'warn', 'HS code')
-    exps = []
-    for pc, hc, vc in [(52, 53, 54), (56, 57, 58)]:
-        if r[pc] in (None, ''): continue
-        v, prob = money(r[vc])
-        hs = re.sub(r'\D', '', str(r[hc] or ''))
-        exps.append(dict(name=clean(r[pc]), value=v, raw=str(r[vc]).strip() if r[vc] is not None else '', hs=hs))
-        if prob: issue(rec, 'Export value for "%s": %s (%s)' % (clean(r[pc]), prob.lower(), str(r[vc]).strip()), 'warn', 'Product value format')
-        if hs and len(hs) < 4: issue(rec, 'HS code %s for "%s" is shorter than 4 digits' % (hs, clean(r[pc])), 'warn', 'HS code')
+    # products (name, value; the value may be written in Tk or US$)
+    def prod(pc, vc, what):
+        if r[pc] in (None, ''): return None
+        v, cur, prob = money(r[vc])
+        raw = str(r[vc]).strip() if r[vc] is not None else ''
+        if prob: issue(rec, '%s value for "%s": %s (%s)' % (what, clean(r[pc]), prob.lower(), raw), 'warn', 'Product value format')
+        return dict(name=clean(r[pc]), value=v, cur=cur, raw=raw)
+    imps = [p for p in (prod(29, 30, 'Import'), prod(33, 34, 'Import'), prod(37, 38, 'Import')) if p]
+    exps = [p for p in (prod(52, 54, 'Export'), prod(56, 58, 'Export')) if p]
     rec['imports'], rec['exports'] = imps, exps
-    for i in range(3): rec['a']['imp_v%d' % (i + 1)] = imps[i]['value'] if i < len(imps) else None
-    for i in range(2): rec['a']['exp_v%d' % (i + 1)] = exps[i]['value'] if i < len(exps) else None
-    rec['suggest'] = clean(r[111]) or ''
     lat, lon, prec = num(r[113]), num(r[114]), num(r[116])
     rec['gps'] = [lon, lat] if lat and lon else None
     rec['gps_prec'] = prec
@@ -288,17 +320,10 @@ for r in R:
             issue(rec, 'GPS point is in %s but the form says %s' % (gd, rec['a']['div']), 'bad', 'GPS')
     else:
         issue(rec, 'No GPS location', 'bad', 'GPS')
-    if rec['grp'] == 'Foreign or JV' and r[12] in (None, ''):
-        issue(rec, 'Foreign ownership share is blank for a foreign or joint-venture firm', 'warn', 'Ownership share blank')
     if rec['a']['imp'] == 'no' and imps:
         issue(rec, 'Says no imports in 12 months but lists imported products', 'bad', 'Contradiction')
     if rec['a']['exp_dir'] == '0%' and rec['a']['exp_ind'] == '0%' and exps:
         issue(rec, 'Reports 0% exports but lists export products', 'warn', 'Contradiction')
-    s = rec['suggest']
-    if s.lower() in ('yes', 'no'):
-        issue(rec, 'Answered "%s" but named no tariff line, SRO or procedure' % s, 'warn', 'Open answer')
-    elif s and (len(s) < 5 or re.match(r'^(open record|hh+n+)', s, re.I)):
-        issue(rec, 'Open answer looks like a placeholder: "%s"' % s, 'warn', 'Open answer')
     if rec['a']['perm'] is not None and rec['a']['perm'] == 0:
         issue(rec, 'Zero permanent workers', 'warn', 'Workers')
     key = re.sub(r'[^a-z]', '', rec['firm'].lower())
@@ -307,6 +332,15 @@ for r in R:
     else:
         name_seen[key] = rec['id']
     recs.append(rec)
+
+# follow-up asked of everyone whose border-tax burden went up or down, but blank in every record
+moved = [rc for rc in recs if rc['a']['burden'] in ('Much lower', 'Lower', 'Higher', 'Much higher')]
+if moved and not any(rc['a']['burden_change'] for rc in recs):
+    issues.append(dict(id='', firm='All records', enum='', date='', kind='warn', type='Skipped follow-up',
+        issue='%d firms said the border-tax burden went up or down, but "what was the main change?" is blank for all of them. Check the skip logic in the form.' % len(moved)))
+if not any(rc['a']['own_share'] for rc in recs):
+    issues.append(dict(id='', firm='All records', enum='', date='', kind='warn', type='Skipped follow-up',
+        issue='"Approximate foreign ownership share" is blank for every record, including all foreign, MNC and joint-venture firms. Check the skip logic in the form.'))
 
 # form-version label conflicts
 for q in Q:
@@ -350,19 +384,20 @@ for q in Q:
     if q.get('unit'): item['unit'] = q['unit']
     if q.get('grid'): item['grid'] = q['grid']
     schema.append(item)
-NUMS = [('year', A, 'Year operations began in Bangladesh', 'year'), ('age', A, 'Years operating in Bangladesh', 'years'),
-        ('perm', A, 'Permanent workers at present', 'workers'), ('temp', A, 'Temporary workers at present', 'workers'),
+NUMS = [('year', S, 'Year operations began in Bangladesh', 'year'), ('age', S, 'Years operating in Bangladesh', 'years'),
+        ('perm', A, 'Number of permanent workers at present', 'workers'),
+        ('temp', A, 'Number of temporary workers at present', 'workers'),
         ('workers', A, 'All workers (permanent + temporary)', 'workers'),
-        ('imp_v1', B, 'Import value, top imported product 1', 'Tk'), ('imp_v2', B, 'Import value, top imported product 2', 'Tk'),
-        ('imp_v3', B, 'Import value, top imported product 3', 'Tk'),
-        ('exp_v1', B, 'Export value, main export product 1', 'Tk'), ('exp_v2', B, 'Export value, main export product 2', 'Tk')]
+        ('imp_v1', B, 'Import value, top importing product 1', 'money'), ('imp_v2', B, 'Import value, top importing product 2', 'money'),
+        ('imp_v3', B, 'Import value, top importing product 3', 'money'),
+        ('exp_v1', B, 'Export value, main export product 1', 'money'), ('exp_v2', B, 'Export value, main export product 2', 'money')]
 schema = [s for s in schema if s['type'] != 'num'] + [dict(key=k, section=s, label=l, type='num', unit=u) for k, s, l, u in NUMS]
 
 versions = Counter(rc['version'] for rc in recs)
 last_sub = max(str(r[133]) for r in R if r[133])
 out = dict(title='Investor Survey 2026', updated=max(rc['start'] for rc in recs),
            last_submission_utc=last_sub, exported=(sys.argv[4] if len(sys.argv) > 4 else NOW.strftime('%Y-%m-%d %H:%M')),
-           schema=schema, records=recs, issues=issues,
+           schema=schema, records=recs, issues=issues, not_consented=not_consented,
            versions=[dict(v=v, n=n, first=min(rc['date'] for rc in recs if rc['version'] == v),
                           last=max(rc['date'] for rc in recs if rc['version'] == v)) for v, n in versions.most_common()])
 json.dump(out, open(OUT, 'w'), ensure_ascii=False, separators=(',', ':'))
